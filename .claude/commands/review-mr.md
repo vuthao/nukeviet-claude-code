@@ -23,14 +23,15 @@ Thực hiện review đầy đủ các file thay đổi trong Merge Request: $AR
 4. **Review NukeViet conventions**
    - Dùng `NV_PREFIXLANG`/`NV_TABLEPREFIX` đúng chỗ
    - Dùng `NV_CURRENTTIME`, `NV_ROOTDIR`
-   - File bắt đầu bằng `die('Stop!')`
-   - Có file language cho chuỗi hiển thị
+   - File bắt đầu bằng kiểm tra hằng đúng (`NV_IS_FILE_ADMIN`, `NV_SYSTEM`, v.v.)
+   - Lấy input qua `$nv_Request` (không dùng `$_GET/$_POST` trực tiếp)
+   - Có file language cho mọi chuỗi hiển thị
 
 5. **Review database** (nếu có thay đổi SQL)
-   - Có `IF NOT EXISTS` trong CREATE TABLE
+   - `action_mysql.php` có đủ `$sql_drop_module` và `$sql_create_module`
    - Có index phù hợp
-   - Charset `utf8mb4`
-   - Có `uninstall.sql`
+   - Charset `utf8` hoặc `utf8mb4` nhất quán
+   - Không dùng từ khóa MySQL làm tên cột
 
 ## Output format
 

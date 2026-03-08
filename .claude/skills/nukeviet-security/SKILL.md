@@ -1,129 +1,103 @@
 ---
 name: nukeviet-security
-description: Review và fix bảo mật code PHP NukeViet 4.5. Phát hiện XSS, CSRF, SQL Injection, lỗ hổng upload file, phân quyền sai. Dùng khi review bảo mật, kiểm tra code trước merge, audit lỗ hổng bảo mật NukeViet.
+description: Review bảo mật NukeViet 4.x — scan pattern nguy hiểm, fix XSS/SQLi/Open Redirect/upload. Load khi review bảo mật hoặc audit trước merge.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
-# Skill: Bảo Mật NukeViet 4.5
+# Skill: Bảo Mật NukeViet 4.x
 
-## Khi nào dùng
-- Review bảo mật code PHP
-- Tìm lỗ hổng XSS, CSRF, SQLi
-- Kiểm tra trước khi merge MR
-- Audit bảo mật định kỳ
-
-## Bước thực hiện review
-
-1. Dùng Grep tìm các pattern nguy hiểm:
+## Scan nhanh
 ```bash
-# Tìm SQL injection nghi ngờ
-grep -rn "\$_GET\|\$_POST\|\$_REQUEST" . --include="*.php" | grep -v "dbescape\|sanitize\|nv_\|filter_var"
+# Input không qua $nv_Request
+grep -rn "\$_GET\|\$_POST\|\$_REQUEST" . --include="*.php" | grep -v "nv_Request\|dbescape\|(int)\|(float)"
 
-# Tìm output không escape
-grep -rn "echo \$\|print \$" . --include="*.php" | grep -v "htmlspecialchars\|nv_html\|intval\|number_format"
+# Output không escape
+grep -rn "echo \$\|print \$" . --include="*.php" | grep -v "htmlspecialchars\|nv_html\|intval"
 
-# Tìm POST handler thiếu CSRF
-grep -rn "REQUEST_METHOD.*POST\|_POST\[" . --include="*.php" | grep -v "formtoken\|nv_check"
+# is_file với path từ user
+grep -rn "is_file\|file_exists" . --include="*.php" | grep -v "nv_is_file\|NV_ROOTDIR"
+
+# Open Redirect qua selfurl
+grep -rn "client_info\['selfurl'\]" . --include="*.php" | grep "redirect\|location\|header"
 ```
 
-2. Đọc từng file có vấn đề và phân tích chi tiết
+## Lỗi phổ biến và cách fix
 
-3. Báo cáo theo mức độ:
-   - 🔴 **CHẶN MERGE** — Lỗ hổng nghiêm trọng, phải fix ngay
-   - 🟡 **NÊN FIX** — Rủi ro trung bình, fix trước khi lên production
-   - 💡 **GỢI Ý** — Cải thiện tốt hơn, không bắt buộc
-
-## Các lỗi hay gặp và cách fix
-
-### SQL Injection
+### Input — PHẢI qua $nv_Request
 ```php
-// ❌ SAI
-$sql = "SELECT * FROM nv_users WHERE id = " . $_GET['id'];
-$sql = "SELECT * FROM nv_news WHERE title LIKE '%" . $_POST['kw'] . "%'";
+// ❌  $id = $_GET['id'];
+// ✅
+$id    = $nv_Request->get_int('id', 'get', 0);
+$title = $nv_Request->get_title('title', 'post', '');
+$title = nv_substr($title, 0, 255);
+$body  = $nv_Request->get_editor('body', '', NV_ALLOWED_HTML_TAGS);
+$desc  = $nv_Request->get_textarea('desc', '', NV_ALLOWED_HTML_TAGS);
+```
 
-// ✅ ĐÚNG
-$id = (int) $_GET['id'];
-$sql = 'SELECT * FROM ' . NV_TABLEPREFIX . '_users WHERE id = ' . $id;
+### SQL — dbescape tự bao nháy đơn
+```php
+// ❌  "WHERE id = " . $_GET['id']
+// ✅
+$id  = $nv_Request->get_int('id', 'get', 0);
+$sql = 'SELECT * FROM ' . NV_PREFIXLANG . '_news WHERE id = ' . $id;
 
-$kw = $db->dbescape('%' . nv_sanitize_string($_POST['kw']) . '%');
-$sql = 'SELECT * FROM ' . NV_PREFIXLANG . '_news WHERE title LIKE ' . $kw;
+$kw  = $nv_Request->get_title('kw', 'get', '');
+$sql = '... WHERE title LIKE ' . $db->dbescape('%' . $kw . '%');
+// dbescape trả về 'value' — KHÔNG thêm dấu nháy vào SQL nữa
 ```
 
 ### XSS
 ```php
-// ❌ SAI
-echo $_GET['keyword'];
-echo $row['title'];
-echo $user['name'];
-
-// ✅ ĐÚNG
-echo nv_htmlspecialchars($_GET['keyword']);
-echo nv_htmlspecialchars($row['title']);
-echo nv_htmlspecialchars($user['name']);
+// ❌  echo $row['title'];
+// ✅  echo nv_htmlspecialchars($row['title']);
 ```
 
-### CSRF
+### Kiểm tra file — dùng nv_is_file
 ```php
-// ❌ SAI
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // xử lý luôn
-}
-
-// ✅ ĐÚNG
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!nv_check_formtoken()) {
-        nv_jsonOutput(['status' => 'error', 'message' => 'Yêu cầu không hợp lệ']);
-        exit();
-    }
-    // xử lý
-}
+// ❌  is_file(NV_DOCUMENT_ROOT . $path_from_user)
+// ✅  nv_is_file($path_from_user, $uploads_dir_user)
 ```
 
-### Phân quyền
+### Open Redirect — không redirect trực tiếp từ selfurl
 ```php
-// ❌ SAI — không kiểm tra quyền
-function deleteItem($id) {
-    global $db;
-    $db->query('DELETE FROM ' . NV_PREFIXLANG . '_items WHERE id = ' . (int)$id);
-}
-
-// ✅ ĐÚNG
-function deleteItem($id) {
-    global $db, $admin_info, $module_info;
-    if (!defined('NV_IS_ADMIN')) { die('Không có quyền'); }
-    if (empty($admin_info['module_' . $module_info['module_name']]['delete'])) {
-        die('Không có quyền xóa');
-    }
-    $db->query('DELETE FROM ' . NV_PREFIXLANG . '_items WHERE id = ' . (int)$id);
-}
+// ❌  nv_redirect_location($client_info['selfurl'])
+// ✅  nv_redirect_location($page_url)
+// Nếu cần dùng selfurl trong form: nv_redirect_encrypt() / nv_get_redirect()
+// Nếu hiển thị ra HTML: nv_htmlspecialchars($client_info['selfurl'])
 ```
 
 ### Upload file
 ```php
-// ✅ ĐÚNG — kiểm tra MIME type thật
-$allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 $finfo = finfo_open(FILEINFO_MIME_TYPE);
-$mime = finfo_file($finfo, $_FILES['file']['tmp_name']);
+$mime  = finfo_file($finfo, $_FILES['f']['tmp_name']);
 finfo_close($finfo);
-
-if (!in_array($mime, $allowed, true)) {
-    // từ chối
-}
-
-// Đổi tên file, không dùng tên gốc
-$ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
-$new_name = md5(uniqid(mt_rand(), true)) . '.' . $ext;
+if (!in_array($mime, ['image/jpeg','image/png','image/gif','image/webp'], true)) { /* từ chối */ }
+$ext      = nv_getextension($_FILES['f']['name']);
+$new_name = md5(uniqid(mt_rand(), true)) . '.' . strtolower($ext);
 ```
 
-## Hàm bảo mật NukeViet quan trọng
+### Phân quyền admin
+```php
+function xoaItem($id) {
+    if (!defined('NV_IS_ADMIN')) die('Stop!!!');
+    global $db;
+    $db->query('DELETE FROM ' . NV_PREFIXLANG . '_items WHERE id = ' . (int)$id);
+}
+```
 
+## Hàm bảo mật — bảng tra nhanh
 | Hàm | Dùng khi |
 |---|---|
-| `nv_htmlspecialchars($str)` | Output HTML |
-| `nv_sanitize_string($str)` | Làm sạch input chuỗi |
-| `$db->dbescape($val)` | Giá trị vào SQL |
-| `nv_check_formtoken()` | Kiểm tra CSRF |
-| `nv_get_formtoken_field()` | Sinh input CSRF trong form |
-| `nv_is_email($email)` | Validate email |
-| `(int) $value` | Cast số nguyên |
-| `(float) $value` | Cast số thực |
+| `$nv_Request->get_int/float` | Input số |
+| `$nv_Request->get_title` | Input chuỗi/text |
+| `$nv_Request->get_editor/textarea` | Nội dung editor |
+| `nv_htmlspecialchars()` | Escape HTML output |
+| `$db->dbescape()` | Escape vào SQL (có nháy) |
+| `nv_is_file()` | Kiểm tra file an toàn |
+| `nv_redirect_encrypt/decrypt` | Redirect an toàn |
+| `nv_check_valid_email()` | Validate email |
+
+## Mức độ báo cáo
+- 🔴 CHẶN MERGE — SQLi, XSS rõ ràng, phân quyền thiếu
+- 🟡 NÊN FIX — Open Redirect, is_file thẳng
+- 💡 GỢI Ý — cải thiện thêm

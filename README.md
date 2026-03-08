@@ -1,6 +1,6 @@
-# Claude Code Setup — NukeViet 4.5 Team
+# Claude Code Setup — NukeViet 4.x Team
 
-Bộ cấu hình Claude Code cho nhóm 10 người phát triển NukeViet 4.5.
+Bộ cấu hình Claude Code cho nhóm phát triển NukeViet 4.x.
 
 ## Cài đặt Claude Code
 
@@ -26,10 +26,12 @@ nukeviet-project/
 └── .claude/
     ├── skills/
     │   ├── nukeviet-module/SKILL.md   ← Tạo module chuẩn
+    │   ├── nukeviet-theme/SKILL.md    ← Thiết kế giao diện
     │   ├── nukeviet-security/SKILL.md ← Review bảo mật
     │   └── nukeviet-mysql/SKILL.md    ← Query MySQL
     ├── commands/
     │   ├── new-module.md              ← /new-module
+    │   ├── new-theme.md               ← /new-theme
     │   ├── review-mr.md               ← /review-mr
     │   └── security-audit.md         ← /security-audit
     └── agents/
@@ -41,12 +43,14 @@ nukeviet-project/
 | Lệnh | Dùng khi |
 |---|---|
 | `/new-module [tên module]` | Tạo module mới đầy đủ |
+| `/new-theme [tên/yêu cầu]` | Tạo theme mới, thêm layout, thêm block position |
 | `/review-mr [tên MR hoặc path]` | Review Merge Request |
 | `/security-audit modules/[tên]` | Audit bảo mật module |
 
 **Ví dụ:**
 ```
 /new-module tin tức có danh mục, bình luận, phân quyền
+/new-theme tạo theme mới từ default, thêm block position banner-top
 /review-mr feature/add-payment-module
 /security-audit modules/shop
 ```
@@ -56,6 +60,7 @@ nukeviet-project/
 Skills được load tự động khi Claude nhận ra context phù hợp:
 
 - Gõ *"tạo module"* → load `nukeviet-module`
+- Gõ *"làm giao diện / tạo theme / thêm block"* → load `nukeviet-theme`
 - Gõ *"review bảo mật"* → load `nukeviet-security`
 - Gõ *"viết query"* → load `nukeviet-mysql`
 

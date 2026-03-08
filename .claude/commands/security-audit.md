@@ -1,4 +1,4 @@
-# Security Audit Module NukeViet 4.5
+# Security Audit Module NukeViet 4.x
 
 Thực hiện audit bảo mật đầy đủ cho: $ARGUMENTS
 
@@ -6,14 +6,17 @@ Thực hiện audit bảo mật đầy đủ cho: $ARGUMENTS
 
 1. **Scan tự động tìm pattern nguy hiểm**
 ```bash
-# SQL injection
-grep -rn "\$_GET\|\$_POST\|\$_REQUEST" $ARGUMENTS --include="*.php" | grep -v "dbescape\|sanitize\|nv_\|(int)\|(float)"
+# SQL injection — input không qua $nv_Request
+grep -rn "\$_GET\|\$_POST\|\$_REQUEST" $ARGUMENTS --include="*.php" | grep -v "dbescape\|(int)\|(float)\|nv_Request"
 
-# XSS
+# XSS — output không qua nv_htmlspecialchars
 grep -rn "echo \$\|print \$" $ARGUMENTS --include="*.php" | grep -v "htmlspecialchars\|nv_html\|intval"
 
-# Thiếu CSRF
-grep -rn "REQUEST_METHOD.*POST" $ARGUMENTS --include="*.php" -A3 | grep -v "formtoken"
+# Dùng is_file/file_exists với path từ user (nên dùng nv_is_file)
+grep -rn "is_file\|file_exists" $ARGUMENTS --include="*.php" | grep -v "nv_is_file\|NV_ROOTDIR"
+
+# Open Redirect qua client_info['selfurl']
+grep -rn "client_info\['selfurl'\]" $ARGUMENTS --include="*.php" | grep "redirect\|location\|header"
 
 # Hardcode credential
 grep -rn "password\|passwd\|secret\|api_key" $ARGUMENTS --include="*.php" | grep -v "//\|#\|\$_POST\|\$config"

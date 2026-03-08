@@ -1,78 +1,58 @@
-# CLAUDE.md — NukeViet 4.5 Project
+# CLAUDE.md — NukeViet 4.x
 
-## Dự án
-- **CMS:** NukeViet 4.5
-- **PHP:** 8.1+
-- **Database:** MySQL 8.0
-- **Server:** Ubuntu 22.04, Nginx + PHP-FPM
-- **Git:** GitLab — nhánh `main` (production), `develop` (staging)
+## Stack
+PHP 8.1+, MySQL 8.0, NukeViet 4.x · Ubuntu 22.04, Nginx+PHP-FPM · GitLab: `main` (prod) | `develop` (staging)
 
-## Lệnh hay dùng
-
+## Lệnh thường dùng
 ```bash
-# Kiểm tra coding standard
-phpcs --standard=PSR2 modules/[ten_module]/
-
-# Tự động fix coding standard
-phpcbf --standard=PSR2 modules/[ten_module]/
-
-# Tìm lỗi bảo mật nhanh
-grep -rn "\$_GET\|\$_POST" modules/ | grep -v "dbescape\|sanitize\|nv_"
-
-# Clear cache NukeViet
-php cli/clear_cache.php
-
-# Chạy migration SQL
-mysql -u root -p nukeviet < modules/[ten_module]/sql/install.sql
-
-# Kiểm tra syntax PHP toàn module
-find modules/[ten_module]/ -name "*.php" -exec php -l {} \;
+phpcs --standard=PSR2 modules/<module>/   # lint
+phpcbf --standard=PSR2 modules/<module>/  # autofix
+find modules/<module>/ -name "*.php" -exec php -l {} \;  # syntax check
 ```
 
-## Quy tắc bắt buộc (KHÔNG được bỏ qua)
+## Quy tắc bảo mật — KHÔNG được vi phạm
 
-### Bảo mật
-- Mọi SQL phải dùng `$db->dbescape()` — KHÔNG nối chuỗi với input người dùng
-- Mọi output HTML phải qua `nv_htmlspecialchars()` — KHÔNG echo trực tiếp
-- Mọi form POST phải kiểm tra `nv_check_formtoken()` — KHÔNG bỏ qua CSRF
-- KHÔNG bao giờ để password, API key, secret trong code hoặc CLAUDE.md
+| Tình huống | Đúng |
+|---|---|
+| Lấy input | `$nv_Request->get_int/get_title/get_editor()` — không dùng `$_GET/$_POST` trực tiếp |
+| SQL | `$db->dbescape()` hoặc `(int)` — không nối chuỗi input |
+| HTML output | `nv_htmlspecialchars()` |
+| Kiểm tra file | `nv_is_file()` — không dùng `is_file()` với path từ user |
+| Redirect | `$page_url` hoặc `nv_redirect_encrypt()` — không dùng `$client_info['selfurl']` trực tiếp |
+| Admin ghi | Kiểm tra `defined('NV_IS_ADMIN')` trước |
+| `$db->dbescape()` | Tự bao dấu nháy đơn — không thêm nháy trong SQL |
 
-### NukeViet conventions
-- Prefix bảng: `NV_PREFIXLANG . '_ten_bang'` (đa ngôn ngữ) hoặc `NV_TABLEPREFIX . '_ten_bang'` (chung)
-- Thời gian: dùng `NV_CURRENTTIME` thay vì `time()`
-- Đường dẫn: dùng `NV_ROOTDIR` thay vì đường dẫn tuyệt đối
-- Mọi file PHP bắt đầu bằng: `if (!defined('NV_IS_FILE_MODULES')) { die('Stop!'); }`
+## NukeViet conventions
 
-### Code style
-- Indent: 4 spaces (không dùng tab)
-- Comment: tiếng Việt
-- Tên biến/hàm: tiếng Anh, camelCase
-- PHPDoc bắt buộc cho mọi function
-
-## Cấu trúc thư mục module chuẩn
 ```
-modules/ten_module/
-├── module.php
-├── funcs/main.php
-├── admin/
-│   ├── index.php
-│   └── funcs/main.php
-├── language/
-│   ├── vi.php
-│   └── en.php
-├── templates/main.tpl
-└── sql/
-    ├── install.sql
-    └── uninstall.sql
+Bảng đa ngôn ngữ : NV_PREFIXLANG . '_ten_bang'   → nv4_vi_news
+Bảng dùng chung  : NV_TABLEPREFIX . '_ten_bang'   → nv4_users
+Thời gian        : NV_CURRENTTIME
+Đường dẫn gốc    : NV_ROOTDIR
+URL              : ?lang=vi&nv=ten-module&op=ten-func
 ```
 
-## Git workflow
-- KHÔNG push trực tiếp vào `main` hoặc `develop`
-- Mọi thay đổi qua Merge Request, cần ít nhất 1 người review
-- Commit message: `feat:`, `fix:`, `refactor:`, `docs:` — thêm `[AI-assisted]` nếu dùng AI
+**Đầu mỗi file — kiểm tra hằng:**
+```
+version.php          → NV_ADMIN + NV_MAINFILE
+functions.php        → NV_SYSTEM
+admin.functions.php  → NV_ADMIN + NV_MAINFILE + NV_IS_MODADMIN
+admin.menu.php       → NV_ADMIN
+action_mysql.php     → NV_IS_FILE_MODULES
+funcs/main.php       → NV_IS_MOD_TENMODULE  (define trong functions.php)
+admin/main.php       → NV_IS_FILE_ADMIN
+```
 
-## Skills có sẵn (Claude tự load khi phù hợp)
-- `nukeviet-module` — Tạo module mới đúng chuẩn
-- `nukeviet-security` — Review bảo mật XSS/CSRF/SQLi
-- `nukeviet-mysql` — Viết và tối ưu query MySQL
-- `nukeviet-review` — Review code trước khi merge
+**Code style:** indent 4 spaces · camelCase biến/hàm · PascalCase class · PHPDoc + comment tiếng Việt
+
+## Git
+Không push thẳng `main`/`develop` · Commit: `feat|fix|refactor|docs: mô tả [AI-assisted]` · MR cần 1 peer review
+
+## Skills (load khi cần — đọc file tương ứng trong `.claude/skills/`)
+- `nukeviet-module`   — cấu trúc file, template code, checklist tạo module
+- `nukeviet-theme`    — cấu trúc theme, layout, block position, XTemplate
+- `nukeviet-security` — patterns nguy hiểm, ví dụ fix
+- `nukeviet-mysql`    — prefix, $db methods, query patterns
+
+## Slash commands
+`/new-module` · `/new-theme` · `/review-mr` · `/security-audit`

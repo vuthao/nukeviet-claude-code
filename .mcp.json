@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "description": "Kéo tài liệu PHP, MySQL, NukeViet mới nhất — tránh Claude dùng API lỗi thời"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp"],
+      "description": "Cho Claude tự thao tác trình duyệt, kiểm tra UI NukeViet, đọc console log"
+    }
+  }
+}

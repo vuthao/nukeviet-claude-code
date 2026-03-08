@@ -1,133 +1,152 @@
 ---
 name: nukeviet-module
-description: Tạo module NukeViet 4.5 mới với cấu trúc chuẩn, admin panel CRUD, phân quyền, validate input, bảo mật XSS/CSRF/SQLi, comment tiếng Việt. Dùng khi tạo module mới, scaffold chức năng, viết CRUD cho NukeViet.
+description: Tạo module NukeViet 4.x — cấu trúc file, template code sẵn dùng, checklist. Load khi tạo module mới hoặc scaffold CRUD.
 allowed-tools: Read, Write, Glob, Grep, Bash
 ---
 
-# Skill: Tạo Module NukeViet 4.5
+# Skill: Module NukeViet 4.x
 
-## Khi nào dùng
-- Tạo module mới cho NukeViet
-- Scaffold CRUD, danh sách, form
-- Tạo cấu trúc thư mục module
+## Cấu trúc file bắt buộc
+```
+modules/ten-module/
+├── version.php           # BẮT BUỘC
+├── functions.php         # BẮT BUỘC — không xóa dù rỗng
+├── admin.functions.php   # BẮT BUỘC
+├── admin.menu.php        # BẮT BUỘC
+├── action_mysql.php      # CSDL install/uninstall
+├── theme.php             # hàm giao diện ngoài site
+├── funcs/main.php        # func mặc định
+├── admin/main.php        # admin func mặc định
+└── language/vi.php · en.php · admin_vi.php · admin_en.php
+```
+Template .tpl → `themes/[theme]/modules/[module]/` — KHÔNG trong modules/
 
-## Quy trình bắt buộc
+## Templates
 
-1. Đọc các module hiện có trong `modules/` để hiểu pattern đang dùng
-2. Tạo đúng cấu trúc thư mục chuẩn
-3. Áp dụng đầy đủ bảo mật (escape output, CSRF, prepared query)
-4. Viết comment PHPDoc tiếng Việt cho mọi function
-5. Tạo file language `vi.php` và `en.php`
-6. Tạo `sql/install.sql` và `sql/uninstall.sql`
-
-## Template: module.php
+### version.php
 ```php
 <?php
+if (!defined('NV_ADMIN') or !defined('NV_MAINFILE')) die('Stop!!!');
+$module_version = array(
+    'name'        => 'Tên module',
+    'modfuncs'    => 'main',
+    'is_sysmod'   => 0,
+    'virtual'     => 1,
+    'version'     => '4.0.00',        // dạng X.Y.ZZ — bắt buộc
+    'date'        => 'Mon, 1 Jan 2025 00:00:00 GMT',
+    'author'      => 'Tác giả',
+    'note'        => '',
+    'uploads_dir' => array($module_name),
+);
+```
+
+### functions.php
+```php
+<?php
+if (!defined('NV_SYSTEM')) die('Stop!!!');
+define('NV_IS_MOD_TENMODULE', true); // tên hằng riêng cho từng module
+```
+
+### admin.functions.php
+```php
+<?php
+if (!defined('NV_ADMIN') or !defined('NV_MAINFILE') or !defined('NV_IS_MODADMIN')) die('Stop!!!');
+define('NV_IS_TENMODULE_ADMIN', true);
+```
+
+### admin.menu.php
+```php
+<?php
+if (!defined('NV_ADMIN')) die('Stop!!!');
+$submenu['main']    = $lang_module['menu_main'];
+$submenu['setting'] = $lang_module['menu_setting'];
+$allow_func[] = 'edit';
+$allow_func[] = 'delete';
+$allow_func[] = 'setting';
+```
+
+### action_mysql.php
+```php
+<?php
+if (!defined('NV_IS_FILE_MODULES')) die('Stop!!!');
+$sql_drop_module   = array();
+$sql_drop_module[] = 'DROP TABLE IF EXISTS '
+    . $db_config['prefix'] . '_' . $lang . '_' . $module_data . '_items';
+$sql_create_module   = $sql_drop_module;
+$sql_create_module[] = 'CREATE TABLE '
+    . $db_config['prefix'] . '_' . $lang . '_' . $module_data . '_items ('
+    . ' `id` MEDIUMINT(8) UNSIGNED NOT NULL AUTO_INCREMENT,'
+    . ' `title` VARCHAR(255) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,'
+    . ' `content` MEDIUMTEXT CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,'
+    . ' `status` TINYINT(1) NOT NULL DEFAULT \'1\','
+    . ' `created_at` INT(11) UNSIGNED NOT NULL DEFAULT \'0\','
+    . ' PRIMARY KEY (`id`), KEY `idx_status` (`status`)'
+    . ') ENGINE=MyISAM DEFAULT CHARSET=utf8';
+```
+
+### funcs/main.php
+```php
+<?php
+if (!defined('NV_IS_MOD_TENMODULE')) die('Stop!!!');
+// xử lý dữ liệu...
+$contents = nv_tenmodule_main($data);
+include(NV_ROOTDIR . '/includes/header.php');
+echo nv_site_theme($contents);
+include(NV_ROOTDIR . '/includes/footer.php');
+```
+
+### theme.php
+```php
+<?php
+if (!defined('NV_IS_MOD_TENMODULE')) die('Stop!!!');
 /**
- * Khai báo module [TEN_MODULE]
- *
- * @package   NukeViet\Modules\[TenModule]
- * @author    NukeViet Developer Team
- * @copyright © 2025 NukeViet CMS
+ * Hiển thị trang chính
+ * @param array $data
+ * @return string
  */
-
-if (!defined('NV_IS_FILE_MODULES')) {
-    die('Stop!');
+function nv_tenmodule_main($data) {
+    global $module_file, $lang_module, $lang_global, $module_info;
+    $tpl = file_exists(NV_ROOTDIR . '/themes/' . $module_info['template'] . '/modules/' . $module_file . '/main.tpl')
+        ? $module_info['template'] : 'default';
+    $xtpl = new XTemplate('main.tpl', NV_ROOTDIR . '/themes/' . $tpl . '/modules/' . $module_file);
+    $xtpl->assign('LANG', $lang_module);
+    $xtpl->assign('GLANG', $lang_global);
+    $xtpl->parse('main');
+    return $xtpl->text('main');
 }
 ```
 
-## Template: funcs/main.php
+### admin/main.php
 ```php
 <?php
-/**
- * Xử lý hiển thị frontend module [TEN_MODULE]
- */
-
-if (!defined('NV_IS_FILE_MODULES')) {
-    die('Stop!');
-}
-
-// Lấy tham số URL, cast type rõ ràng
-$page = isset($array_op[0]) ? (int) $array_op[0] : 1;
-$page = max(1, $page);
-
-// Query dùng class $db — không nối chuỗi trực tiếp
-$sql = 'SELECT id, title, alias, pubdate FROM ' . NV_PREFIXLANG . '_[ten_module]'
-    . ' WHERE status = 1'
-    . ' ORDER BY pubdate DESC'
-    . ' LIMIT ' . NV_ROWS_PER_PAGE . ' OFFSET ' . (($page - 1) * NV_ROWS_PER_PAGE);
-$result = $db->query($sql);
-
-$items = [];
-while ($row = $db->fetch_assoc($result)) {
-    // Escape output chống XSS
-    $row['title'] = nv_htmlspecialchars($row['title']);
-    $items[] = $row;
-}
+if (!defined('NV_IS_FILE_ADMIN')) die('Stop!!!');
+$xtpl = new XTemplate('main.tpl', NV_ROOTDIR . '/themes/' . $global_config['module_theme'] . '/modules/' . $module_file);
+$xtpl->assign('LANG', $lang_module);
+$xtpl->parse('main');
+$contents = $xtpl->text('main');
+include(NV_ROOTDIR . '/includes/header.php');
+echo nv_admin_theme($contents);
+include(NV_ROOTDIR . '/includes/footer.php');
 ```
 
-## Template: admin/funcs/main.php (save action)
+### Lấy input (dùng $nv_Request — không $_GET/$_POST)
 ```php
-<?php
-if (!defined('NV_IS_FILE_MODULES')) {
-    die('Stop!');
-}
-
-// Kiểm tra quyền admin
-if (!defined('NV_IS_ADMIN')) {
-    die('Không có quyền truy cập');
-}
-
-if ($op === 'save') {
-    // Bắt buộc: kiểm tra CSRF token
-    if (!nv_check_formtoken()) {
-        nv_jsonOutput(['status' => 'error', 'message' => 'Token không hợp lệ']);
-    }
-
-    // Validate và sanitize input
-    $title = isset($_POST['title']) ? nv_sanitize_string(trim($_POST['title'])) : '';
-
-    if (empty($title)) {
-        nv_jsonOutput(['status' => 'error', 'message' => 'Tiêu đề không được để trống']);
-    }
-
-    // Lưu DB dùng dbescape
-    $id = (int) ($_POST['id'] ?? 0);
-    if ($id > 0) {
-        $sql = 'UPDATE ' . NV_PREFIXLANG . '_[ten_module]'
-            . ' SET title = ' . $db->dbescape($title)
-            . ', updated_at = ' . NV_CURRENTTIME
-            . ' WHERE id = ' . $id;
-    } else {
-        $sql = 'INSERT INTO ' . NV_PREFIXLANG . '_[ten_module] (title, created_at, status)'
-            . ' VALUES (' . $db->dbescape($title) . ', ' . NV_CURRENTTIME . ', 1)';
-    }
-
-    if ($db->query($sql)) {
-        nv_jsonOutput(['status' => 'success', 'message' => 'Lưu thành công']);
-    }
-}
+$id      = $nv_Request->get_int('id', 'get', 0);
+$page    = $nv_Request->get_int('page', 'get', 1);
+$title   = $nv_Request->get_title('title', 'post', '');
+$title   = nv_substr($title, 0, 255);
+$body    = $nv_Request->get_editor('body', '', NV_ALLOWED_HTML_TAGS);
+$desc    = $nv_Request->get_textarea('desc', '', NV_ALLOWED_HTML_TAGS);
+// Đưa lại vào editor/textarea sau khi lấy từ DB:
+$body    = nv_htmlspecialchars(nv_editor_br2nl($row['body']));
+$desc    = nv_htmlspecialchars(nv_br2nl($row['description']));
 ```
 
-## Template: sql/install.sql
-```sql
-CREATE TABLE IF NOT EXISTS `NV_PREFIXLANG_[ten_module]` (
-  `id`         INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
-  `title`      VARCHAR(255) NOT NULL DEFAULT '',
-  `content`    MEDIUMTEXT NOT NULL,
-  `status`     TINYINT(1) NOT NULL DEFAULT '1' COMMENT '1=hiện, 0=ẩn',
-  `created_at` INT(11) UNSIGNED NOT NULL DEFAULT '0',
-  `updated_at` INT(11) UNSIGNED NOT NULL DEFAULT '0',
-  PRIMARY KEY (`id`),
-  KEY `idx_status` (`status`),
-  KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-```
-
-## Checklist sau khi tạo
-- [ ] Mọi output qua `nv_htmlspecialchars()`
-- [ ] Mọi POST action kiểm tra `nv_check_formtoken()`
-- [ ] SQL dùng `$db->dbescape()` hoặc cast type
-- [ ] Có `vi.php` và `en.php`
-- [ ] Có `install.sql` và `uninstall.sql`
-- [ ] PHPDoc tiếng Việt cho mọi function
+## Checklist
+- [ ] 4 file bắt buộc có đủ
+- [ ] `functions.php` tồn tại — không xóa dù rỗng
+- [ ] Phiên bản dạng `X.Y.ZZ`
+- [ ] Template .tpl đặt trong `themes/` không phải `modules/`
+- [ ] Language có đủ `vi.php` và `admin_vi.php`
+- [ ] `action_mysql.php` có cả `$sql_drop_module` và `$sql_create_module`
+- [ ] Input qua `$nv_Request`, output qua `nv_htmlspecialchars()`
