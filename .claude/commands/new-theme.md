@@ -2,6 +2,13 @@
 
 Thực hiện tác vụ liên quan đến giao diện NukeViet: $ARGUMENTS
 
+## Quy trình
+
+**Bước 0 — Plan Mode trước, không code ngay:**
+- Xác định loại tác vụ (tạo mới / thêm block / tùy biến / nâng cấp)
+- Đọc cấu trúc theme hiện tại liên quan
+- Trình bày plan cụ thể → chờ dev duyệt → mới bắt đầu thực hiện
+
 ## Xác định loại tác vụ
 
 Đọc yêu cầu và xác định một trong các trường hợp sau:

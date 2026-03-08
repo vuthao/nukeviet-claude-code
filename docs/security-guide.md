@@ -106,7 +106,9 @@ $new_name = md5(uniqid(mt_rand(), true)) . '.' . strtolower($ext);
 
 ```php
 function xoaItem($id) {
-    if (!defined('NV_IS_ADMIN')) die('Stop!!!');
+    if (!defined('NV_IS_ADMIN')) {
+        exit('Stop!!!');
+    }
     global $db;
     $db->query('DELETE FROM ' . NV_PREFIXLANG . '_items WHERE id = ' . (int) $id);
 }
@@ -116,14 +118,35 @@ function xoaItem($id) {
 
 ## Bảng tra nhanh — hàm bảo mật
 
+### $nv_Request — đầy đủ method
+
+**Tham số `$mode`** nhận: `'get'`, `'post'`, `'session'`, `'cookie'`, `'request'`, `'env'`, `'server'`.
+Có thể dùng nhiều mode cách nhau dấu phẩy — lấy từ mode đầu tiên tìm thấy: `'get,post'`.
+
+| Method | Dùng khi | Ghi chú |
+|---|---|---|
+| `get_int($name, $mode, $default)` | Input số nguyên | |
+| `get_absint($name, $mode, $default)` | Số nguyên tuyệt đối (luôn ≥0) | `abs((int) $value)` |
+| `get_float($name, $mode, $default)` | Input số thực | |
+| `get_bool($name, $mode, $default)` | Input boolean | |
+| `get_title($name, $mode, $default)` | Text ngắn — strip HTML, giữ text | |
+| `get_string($name, $mode, $default)` | Chuỗi đã lọc bảo mật — HTML bị strip/escape | **Không phải raw** — vẫn qua security filter |
+| `get_editor($name, $default, $allowed_tags)` | Nội dung WYSIWYG | **Chỉ đọc từ POST** — không có param `$mode` |
+| `get_textarea($name, $default, $allowed_tags, $save)` | Nội dung textarea | **Chỉ đọc từ POST** — `$save=true` chuyển newline → `<br />` |
+| `get_array($name, $mode, $default)` | Mảng từ GET/POST | vd: checkbox group |
+| `get_typed_array($name, $mode, $type, ...)` | Mảng ép kiểu | `$type`: 'int','bool','float','string','title','textarea','editor' |
+| `set_Session($name, $value)` | Ghi vào session (encode AES) | Đọc lại bằng `get_int/get_string(..., 'session')` |
+| `set_Cookie($name, $value, $expire)` | Ghi cookie an toàn (encode AES) | `$expire` = số giây kể từ bây giờ |
+| `isset_request($names, $mode, $all)` | Kiểm tra key tồn tại | `$all=true`: tất cả phải có; `$all=false`: ít nhất 1 |
+| `unset_request($names, $mode)` | Xóa key khỏi superglobal | |
+
+### Các hàm bảo mật khác
+
 | Hàm | Dùng khi |
 |---|---|
-| `$nv_Request->get_int/float` | Input số |
-| `$nv_Request->get_title` | Input chuỗi/text ngắn |
-| `$nv_Request->get_editor` | Nội dung rich editor |
-| `$nv_Request->get_textarea` | Nội dung textarea |
 | `nv_htmlspecialchars()` | Escape HTML output |
 | `$db->prepare()` + `bindParam()` | Chuỗi từ user vào SQL |
+| `$db->dblikeescape($value)` | Escape ký tự đặc biệt trong LIKE |
 | `nv_is_file()` | Kiểm tra file an toàn |
 | `nv_redirect_encrypt/decrypt` | Redirect an toàn |
 | `nv_check_valid_email()` | Validate email |

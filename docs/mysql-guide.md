@@ -10,40 +10,133 @@ NV_TABLEPREFIX . '_ten_bang'   // bảng dùng chung   → nv4_users
 
 ---
 
+## $db và $db_slave
+
+NukeViet cung cấp **hai** biến database:
+
+| Biến | Dùng cho |
+|---|---|
+| `$db` | WRITE — INSERT, UPDATE, DELETE, và SELECT cần fresh data |
+| `$db_slave` | READ — SELECT thông thường (tối ưu cho slave DB hoặc caching) |
+
+Trong thực tế môi trường single-server, `$db_slave` trỏ cùng server với `$db`. Tuy nhiên **luôn dùng `$db_slave` cho SELECT** để code sẵn sàng scale.
+
+---
+
 ## $db — method hay dùng
 
 ```php
-$db->query($sql)                  // chạy query, trả về PDOStatement
-$db->query($sql)->fetch()         // chạy query + lấy 1 dòng
-$db->query($sql)->fetchAll()      // chạy query + lấy tất cả dòng
-$db->query($sql)->fetchColumn()   // chạy query + lấy giá trị ô đầu tiên (COUNT, MAX...)
-$db->prepare($sql)                // chuẩn bị prepared statement
+// Chạy query trực tiếp
+$db->query($sql)                  // trả về PDOStatement
+$db->query($sql)->fetch()         // lấy 1 dòng (associative array)
+$db->query($sql)->fetchAll()      // lấy tất cả dòng
+$db->query($sql)->fetchColumn()   // lấy giá trị ô đầu tiên (COUNT, MAX...)
+
+// Prepared statement (cho user input là chuỗi)
+$db->prepare($sql)                // chuẩn bị statement, trả về PDOStatement
 $db->lastInsertId()               // ID vừa INSERT
+
+// Helper methods (gộp prepare + execute + result)
+$db->insert_id($sql, '', $data)           // INSERT + trả về lastInsertId
+$db->affected_rows_count($sql, $data)     // UPDATE/DELETE + trả về rowCount()
+
+// Escape helpers
+$db->dblikeescape($value)         // escape ký tự đặc biệt trong LIKE (%, _)
+$db->regexpescape($value)         // escape ký tự đặc biệt trong REGEXP
+$db->quote($value)                // PDO quote — dùng khi không thể dùng bindParam
 ```
+
+---
+
+## Query Builder — pattern phổ biến nhất
+
+Thay vì nối chuỗi SQL thủ công, dùng Query Builder (luôn kết hợp với `$db_slave` cho SELECT):
+
+```php
+$db_slave->sqlreset()           // reset tất cả điều kiện cũ
+    ->select('id, title, alias')
+    ->from(NV_PREFIXLANG . '_items')
+    ->where('status = 1')
+    ->order('weight ASC')
+    ->limit(10)
+    ->offset(($page - 1) * 10);
+
+$result = $db_slave->query($db_slave->sql());
+while ($row = $result->fetch()) {
+    // xử lý từng dòng
+}
+
+// Hoặc dùng fetchAll():
+$rows = $db_slave->query($db_slave->sql())->fetchAll();
+```
+
+Có thể chain tiếp sau `sqlreset()` mà không cần reset lại (chỉ thay đổi clause cần thiết):
+```php
+// Đếm trước
+$db_slave->sqlreset()->select('COUNT(*)')->from(NV_PREFIXLANG . '_items')->where('status=1');
+$total = (int) $db_slave->query($db_slave->sql())->fetchColumn();
+
+// Dùng lại, chỉ đổi select + thêm limit/offset
+$db_slave->select('*')->order('weight ASC')->limit($per_page)->offset($offset);
+$rows = $db_slave->query($db_slave->sql())->fetchAll();
+```
+
+Tất cả method Query Builder đều trả về `$this` nên chain được:
+
+| Method | Tương đương SQL |
+|---|---|
+| `select('col1, col2')` | `SELECT col1, col2` |
+| `from('table')` | `FROM table` |
+| `join('LEFT JOIN t2 ON t1.id = t2.id')` | `LEFT JOIN ...` — truyền cả mệnh đề JOIN |
+| `where('status = 1 AND id > 0')` | `WHERE ...` |
+| `group('category_id')` | `GROUP BY category_id` |
+| `having('COUNT(*) > 1')` | `HAVING COUNT(*) > 1` |
+| `order('weight ASC')` | `ORDER BY weight ASC` |
+| `limit(10)` | `LIMIT 10` |
+| `offset(20)` | `OFFSET 20` |
+| `sql()` | Trả về chuỗi SQL hoàn chỉnh |
+| `sqlreset()` | Reset tất cả về rỗng — gọi trước mỗi query mới |
 
 ---
 
 ## Pattern: SELECT
 
 ```php
-// Nhiều dòng
+// Nhiều dòng — dùng $db_slave
 $sql  = 'SELECT id, title FROM ' . NV_PREFIXLANG . '_items WHERE status = 1 ORDER BY weight ASC';
-$rows = $db->query($sql)->fetchAll();
+$rows = $db_slave->query($sql)->fetchAll();
 
-// 1 dòng
+// 1 dòng — dùng $db_slave
 $sql = 'SELECT * FROM ' . NV_PREFIXLANG . '_items WHERE id = ' . (int) $id . ' LIMIT 1';
-$row = $db->query($sql)->fetch();
+$row = $db_slave->query($sql)->fetch();
 
-// 1 giá trị (COUNT, MAX...)
-$total = (int) $db->query('SELECT COUNT(*) FROM ' . NV_PREFIXLANG . '_items')->fetchColumn();
-$max   = (int) $db->query('SELECT MAX(weight) FROM ' . NV_PREFIXLANG . '_items')->fetchColumn();
+// 1 giá trị (COUNT, MAX...) — dùng $db_slave
+$total = (int) $db_slave->query('SELECT COUNT(*) FROM ' . NV_PREFIXLANG . '_items')->fetchColumn();
+$max   = (int) $db_slave->query('SELECT MAX(weight) FROM ' . NV_PREFIXLANG . '_items')->fetchColumn();
 ```
 
 ## Pattern: phân trang
 
 ```php
+// Dùng Query Builder (chuẩn)
+$db_slave->sqlreset()
+    ->select('COUNT(*)')
+    ->from(NV_PREFIXLANG . '_items')
+    ->where('status = 1');
+$total = (int) $db_slave->query($db_slave->sql())->fetchColumn();
+
+if ($total > 0) {
+    $offset = ($page - 1) * $perPage;
+    $db_slave->select('id, title, alias, created_at')
+        ->order('created_at DESC')
+        ->limit($perPage)
+        ->offset($offset);
+    $rows = $db_slave->query($db_slave->sql())->fetchAll();
+}
+
+// Hoặc dùng SQL thuần (cũng được)
 $where = ' WHERE status = 1';
-$total = (int) $db->query('SELECT COUNT(*) FROM ' . NV_PREFIXLANG . '_items' . $where)->fetchColumn();
+$total = (int) $db_slave->query('SELECT COUNT(*) FROM ' . NV_PREFIXLANG . '_items' . $where)->fetchColumn();
 
 if ($total > 0) {
     $offset = ($page - 1) * $perPage;
@@ -51,7 +144,7 @@ if ($total > 0) {
             . ' FROM '  . NV_PREFIXLANG . '_items' . $where
             . ' ORDER BY created_at DESC'
             . ' LIMIT ' . $perPage . ' OFFSET ' . $offset;
-    $rows = $db->query($sql)->fetchAll();
+    $rows = $db_slave->query($sql)->fetchAll();
 }
 ```
 
@@ -88,6 +181,40 @@ if ($sth->rowCount()) {
 $db->query('DELETE FROM ' . NV_PREFIXLANG . '_items WHERE id = ' . (int) $id);
 ```
 
+### Dùng helper insert_id() và affected_rows_count()
+
+```php
+// INSERT với helper — gọn hơn prepare+bindParam+execute+lastInsertId
+$sql = 'INSERT INTO ' . NV_PREFIXLANG . '_items (title, status, created_at)
+        VALUES (:title, :status, ' . NV_CURRENTTIME . ')';
+$new_id = $db->insert_id($sql, '', [
+    'title'  => $row['title'],
+    'status' => (string) $row['status']
+]);
+
+// UPDATE/DELETE với helper — trả về số dòng bị ảnh hưởng
+$sql = 'UPDATE ' . NV_PREFIXLANG . '_items SET status = :status WHERE id = ' . (int) $id;
+$affected = $db->affected_rows_count($sql, ['status' => '1']);
+if ($affected) {
+    // cập nhật thành công
+}
+```
+
+> Lưu ý: `insert_id()` và `affected_rows_count()` nhận `$data` là array `['key' => 'value']` — tất cả value đều là string (PDO::PARAM_STR). Nếu cần PARAM_INT, dùng `prepare()` + `bindParam()` thủ công.
+
+### LIKE query an toàn
+
+```php
+// Escape ký tự đặc biệt % và _ trong LIKE
+$keyword = $db->dblikeescape($nv_Request->get_title('keyword', 'get', ''));
+$sql = 'SELECT * FROM ' . NV_PREFIXLANG . '_items WHERE title LIKE :kw';
+$sth = $db->prepare($sql);
+$kw  = '%' . $keyword . '%';
+$sth->bindParam(':kw', $kw, PDO::PARAM_STR);
+$sth->execute();
+$rows = $sth->fetchAll();
+```
+
 ---
 
 ## Schema bảng chuẩn (dùng trong action_mysql.php)
@@ -109,6 +236,34 @@ $db->query('DELETE FROM ' . NV_PREFIXLANG . '_items WHERE id = ' . (int) $id);
 . ') ENGINE=MyISAM DEFAULT CHARSET=utf8'
 // Dùng utf8mb4 nếu cần lưu emoji — đồng bộ với $db_config['charset']
 ```
+
+---
+
+## $nv_Cache — cache kết quả query
+
+Dùng `$nv_Cache->db()` thay cho `$db_slave->query()` trực tiếp khi dữ liệu ít thay đổi (config, danh sách tĩnh, block):
+
+```php
+// Signature: $nv_Cache->db($sql, $key_field, $module_name)
+// - $key_field: tên cột làm key array kết quả ('' = numeric index)
+// - $module_name: dùng để invalidate cache khi module cập nhật
+
+// Lấy config module (key_field = 'config_name', dùng '' để lấy numeric array)
+$sql  = 'SELECT config_name, config_value FROM ' . NV_PREFIXLANG . '_' . $module_data . '_config';
+$list = $nv_Cache->db($sql, '', $module_name);
+$config = [];
+foreach ($list as $row) {
+    $config[$row['config_name']] = $row['config_value'];
+}
+
+// Lấy danh sách với key = 'id'
+$db->sqlreset()->select('id, title, alias')->from(NV_PREFIXLANG . '_items')
+    ->where('status = 1')->order('weight ASC')->limit(10);
+$list = $nv_Cache->db($db->sql(), 'id', $module_name);
+// $list['5'] = ['id' => 5, 'title' => '...', 'alias' => '...']
+```
+
+> Cache bị xóa tự động khi module admin thực hiện thao tác ghi. Không cần xóa thủ công trong luồng bình thường.
 
 ---
 

@@ -129,11 +129,24 @@ return $xtpl->text('main');
 
 ## Block global của theme
 
+Block của **theme** đặt trong `themes/ten-theme/blocks/global.TEN.php`:
+
 ```php
-// File: themes/ten-theme/blocks/global.ten-block.php
-if (!defined('NV_IS_BLOCK_THEME')) die('Stop!!!');
-$content = '...'; // $content là output trả về
+// Guard: NV_IS_BLOCK_THEME (chỉ dùng cho block của theme)
+if (!defined('NV_IS_BLOCK_THEME')) {
+    exit('Stop!!!');
+}
+$content = '...'; // $content là biến output trả về hệ thống
 ```
+
+> Block của **module** (`modules/ten-module/blocks/global.TEN.php`) dùng guard khác: `NV_MAINFILE` — xem chi tiết trong `docs/module-guide.md`.
+
+**Phân biệt nhanh:**
+
+| Loại block | Vị trí file | Guard constant |
+|---|---|---|
+| Block của theme | `themes/ten-theme/blocks/global.*.php` | `NV_IS_BLOCK_THEME` |
+| Block của module | `modules/ten-module/blocks/global.*.php` | `NV_MAINFILE` |
 
 ---
 

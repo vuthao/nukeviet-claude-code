@@ -2,6 +2,13 @@
 
 Tạo đầy đủ cấu trúc module NukeViet 4.x cho: $ARGUMENTS
 
+## Quy trình
+
+**Bước 0 — Plan Mode trước, không code ngay:**
+- Phân tích yêu cầu, đọc module mẫu liên quan trong `modules/`
+- Lên danh sách file cần tạo, cấu trúc database, các func cần có
+- Trình bày plan → chờ dev duyệt → mới bắt đầu tạo file
+
 ## Các bước thực hiện
 
 1. **Phân tích yêu cầu**
@@ -45,7 +52,7 @@ Tạo đầy đủ cấu trúc module NukeViet 4.x cho: $ARGUMENTS
 4. **Kiểm tra bảo mật trước khi hoàn thành**
    - Mọi input lấy qua `$nv_Request->get_int()`, `get_title()`, `get_editor()`, v.v.
    - Mọi output HTML qua `nv_htmlspecialchars()`
-   - SQL dùng `$db->dbescape()` hoặc cast `(int)` — không nối chuỗi trực tiếp
+   - SQL dùng `$db->prepare()` + `bindParam()` cho chuỗi từ user — số nguyên dùng `(int)` trực tiếp
    - Kiểm tra `defined('NV_IS_ADMIN')` trước thao tác ghi trong admin
    - Kiểm tra `defined('NV_IS_FILE_ADMIN')` trong `admin/main.php`
 

@@ -40,7 +40,24 @@ admin.functions.php  → NV_ADMIN + NV_MAINFILE + NV_IS_MODADMIN
 admin.menu.php       → NV_ADMIN
 action_mysql.php     → NV_IS_FILE_MODULES
 funcs/main.php       → NV_IS_MOD_TENMODULE  (define trong functions.php)
-admin/main.php       → NV_IS_FILE_ADMIN
+admin/main.php       → NV_IS_FILE_ADMIN     (define trong admin.functions.php)
+blocks/*.php (module)→ NV_MAINFILE          (KHÔNG phải NV_IS_BLOCK_THEME)
+blocks/*.php (theme) → NV_IS_BLOCK_THEME
+```
+
+**Hằng phân quyền quan trọng:**
+```
+NV_IS_ADMIN      → đã đăng nhập admin (bất kỳ level)
+NV_IS_MODADMIN   → là admin của module hiện tại
+NV_IS_SPADMIN    → super admin — dùng để kiểm soát tính năng đặc quyền
+                   vd: $allow_func[] = 'config' chỉ khi defined('NV_IS_SPADMIN')
+```
+
+**Hằng bảng database:**
+```
+NV_PREFIXLANG        → prefix bảng đa ngôn ngữ   (vd: nv4_vi)
+NV_TABLEPREFIX       → prefix bảng dùng chung      (vd: nv4)
+NV_CONFIG_GLOBALTABLE→ bảng config toàn cục hệ thống (dùng cho comment, API key...)
 ```
 
 **Code style:** 4 spaces · camelCase biến/hàm · PascalCase class · PHPDoc + comment tiếng Việt
@@ -87,14 +104,27 @@ themes/ten-theme/
 ## MySQL Patterns
 
 ```php
-$db->query($sql)->fetch()         // lấy 1 dòng
-$db->query($sql)->fetchAll()      // lấy tất cả dòng
-$db->query($sql)->fetchColumn()   // lấy ô đầu tiên (COUNT, MAX...)
-$db->prepare($sql)                // chuẩn bị prepared statement cho user input
-$db->lastInsertId()               // ID vừa INSERT
+// READ — luôn dùng $db_slave cho SELECT
+$db_slave->query($sql)->fetch()         // lấy 1 dòng
+$db_slave->query($sql)->fetchAll()      // lấy tất cả dòng
+$db_slave->query($sql)->fetchColumn()   // lấy ô đầu tiên (COUNT, MAX...)
+
+// Query Builder (pattern phổ biến nhất trong codebase)
+$db_slave->sqlreset()->select('*')->from(NV_PREFIXLANG . '_items')
+    ->where('status=1')->order('weight ASC')->limit(10);
+$rows = $db_slave->query($db_slave->sql())->fetchAll();
+
+// WRITE — dùng $db cho INSERT/UPDATE/DELETE
+$db->prepare($sql)                       // prepared statement cho user input (chuỗi)
+$db->lastInsertId()                      // ID vừa INSERT
+$db->insert_id($sql, '', $data)          // INSERT helper — trả về ID mới
+$db->affected_rows_count($sql, $data)    // UPDATE/DELETE helper — trả về rowCount
+
+// Cache query (ưu tiên dùng trước khi gọi $db_slave trực tiếp)
+$nv_Cache->db($sql, $key_field, $module_name)   // trả về array, cache tự động
 ```
 
-Số nguyên và hằng hệ thống nối thẳng vào SQL — chuỗi từ user input dùng `prepare()` + `bindParam()`.  
+Số nguyên và hằng hệ thống nối thẳng vào SQL — chuỗi từ user input dùng `prepare()` + `bindParam()`.
 Chi tiết: xem `docs/mysql-guide.md`
 
 ---
