@@ -4,21 +4,55 @@
 
 ```
 themes/ten-theme/
-├── config.ini            # tên theme, layoutdefault, <positions>
-├── theme.php             # hàm PHP của theme
-├── default.jpg           # ảnh mô tả (800×600px)
+├── config.ini            # BẮT BUỘC — tên theme, layoutdefault, positions, setlayout, setblocks
+├── config_default.php    # giá trị CSS mặc định cho trang tùy biến theme admin
+├── config.php            # logic xử lý form tùy biến CSS (guard: NV_IS_FILE_THEMES)
+├── theme.php             # BẮT BUỘC — hàm PHP của theme (guard: NV_SYSTEM + NV_MAINFILE)
+├── default.jpg           # ảnh mô tả theme
 ├── css/
-│   ├── style.css · style.responsive.css · bootstrap.min.css
-│   ├── custom.css            ← viết CSS tùy chỉnh vào đây
+│   ├── bootstrap.min.css           # responsive mode
+│   ├── bootstrap.non-responsive.css# non-responsive mode
+│   ├── bootstrap-theme.min.css
+│   ├── style.css                   # style chính (dùng cả 2 mode)
+│   ├── style.responsive.css        # responsive-only styles
+│   ├── style.non-responsive.css    # non-responsive-only styles
+│   ├── custom.css            ← viết CSS tùy chỉnh vào đây (load sau cùng)
+│   ├── admin.css             ← load thêm khi user là admin
 │   └── ten-module.css        ← tự load khi module chạy
 ├── js/
 │   ├── main.js · bootstrap.min.js
 │   └── custom.js             ← viết JS tùy chỉnh vào đây
+├── fonts/                    # icon font (NukeVietIcons.*)
+├── images/
+│   ├── icons/
+│   ├── no_image.gif
+│   └── header.png            # banner mặc định (dùng khi site chưa cấu hình banner)
+├── language/
+│   ├── vi.php · en.php       # ngôn ngữ ngoài site
+│   └── admin_vi.php · admin_en.php
 ├── layout/
-│   ├── layout.TENL.tpl       # layout file
-│   └── block.default.tpl     # BẮT BUỘC — không xóa
+│   ├── layout.TENL.tpl       # layout file chính
+│   ├── header_only.tpl       # phần <html>...<body> — include vào layout qua {FILE}
+│   ├── header_extended.tpl   # header mở rộng (logo, menu...) — include vào layout
+│   ├── footer_extended.tpl   # footer mở rộng — include vào layout
+│   ├── footer_only.tpl       # đóng </body></html> — include vào layout
+│   ├── simple.tpl            # layout tối giản — chỉ {MODULE_CONTENT}, không block
+│   ├── block.default.tpl     # BẮT BUỘC — không xóa
+│   ├── block.border.tpl      # block dạng well (không có title)
+│   ├── block.no_title.tpl    # block chỉ có content (không title, không wrapper)
+│   ├── block.primary.tpl     # block dạng panel-primary
+│   └── block.simple.tpl      # block dạng panel-body với h3 title
 ├── blocks/
-│   └── global.TEN.php        # block global của theme
+│   ├── global.TEN.php        # logic block của theme
+│   ├── global.TEN.tpl        # template cho block (đi kèm .php)
+│   └── global.TEN.ini        # cấu hình mặc định block (tùy chọn)
+├── system/
+│   ├── config.tpl            # template form tùy biến CSS admin
+│   ├── mail.tpl              # template email hệ thống
+│   ├── admin_toolbar.tpl     # toolbar admin ngoài site
+│   ├── alert.tpl             # thông báo hệ thống
+│   ├── error_info.tpl        # trang lỗi
+│   └── info_die.tpl          # trang lỗi nghiêm trọng
 └── modules/ten-module/       # override tpl module — chỉ copy khi thực sự cần sửa
 ```
 
@@ -37,6 +71,8 @@ NukeViet dùng **24 cột** (không phải 12 cột chuẩn Bootstrap).
 | `main-left-right` | 13-6-5 |
 | `left-right-main` | 5-6-13 |
 
+Layout `simple.tpl` là trường hợp đặc biệt: không có block positions, chỉ render `{MODULE_CONTENT}`. Dùng cho module cần giao diện tối giản (ví dụ: error page, modal).
+
 ---
 
 ## Tạo theme mới từ default
@@ -48,34 +84,80 @@ cp -r themes/default themes/ten-theme-moi
 **Dọn dẹp sau khi copy:**
 - `blocks/` → xóa hết, giữ `index.html`
 - `css/` → xóa module css thừa; giữ `admin.css, bootstrap*.css, custom.css, style*.css`
-- `images/` → giữ `icons/, index.html, no_image.gif`
+- `fonts/` → giữ nguyên
+- `images/` → giữ `icons/, index.html, no_image.gif, header.png`
 - `js/` → giữ `bootstrap.min.js, custom.js, main.js`
-- `layout/` → giữ `block.default.tpl`; xóa block/layout không dùng
+- `language/` → giữ nguyên (sửa nội dung nếu cần)
+- `layout/` → giữ toàn bộ `block.*.tpl`, `header_*.tpl`, `footer_*.tpl`, `simple.tpl`; xóa layout không dùng
 - `modules/` → xóa hết (copy lại từng module khi cần sửa)
+- `system/` → giữ nguyên
 
 ---
 
-## config.ini — cấu hình cơ bản
+## config.ini — cấu hình đầy đủ
 
 ```xml
+<?xml version="1.0" encoding="UTF-8"?>
 <theme>
-  <info>
-    <n>Tên giao diện</n>
-    <author>Tác giả</author>
-    <version>1.0</version>
-    <thumbnail>default.jpg</thumbnail>
-  </info>
-  <layoutdefault>main</layoutdefault>
-  <positions>
-    <position><n>Header</n><tag>[HEADER]</tag></position>
-    <position><n>Left</n><tag>[LEFT]</tag></position>
-    <position><n>Right</n><tag>[RIGHT]</tag></position>
-    <position><n>Footer</n><tag>[FOOTER]</tag></position>
-  </positions>
+    <info>
+        <name>Tên giao diện</name>
+        <author>Tác giả</author>
+        <website>https://example.com</website>
+        <description>Mô tả ngắn về theme</description>
+        <thumbnail>default.jpg</thumbnail>
+    </info>
+    <layoutdefault>left-main-right</layoutdefault>
+
+    <!-- Các block position — tag IN HOA, chỉ dùng chữ/số/gạch dưới -->
+    <positions>
+        <position>
+            <name>HEADER</name>
+            <tag>[HEADER]</tag>
+        </position>
+        <position>
+            <name>LEFT</name>
+            <tag>[LEFT]</tag>
+        </position>
+        <position>
+            <name>RIGHT</name>
+            <tag>[RIGHT]</tag>
+        </position>
+        <position>
+            <name>FOOTER</name>
+            <tag>[FOOTER]</tag>
+        </position>
+    </positions>
+
+    <!-- setlayout: gán layout cố định cho module/func cụ thể -->
+    <setlayout>
+        <layout>
+            <name>left-main</name>
+            <funcs>page:main</funcs>
+            <funcs>statistics:main,allreferers</funcs>
+        </layout>
+    </setlayout>
+
+    <!-- setblocks: khai báo blocks cài sẵn khi install theme -->
+    <setblocks>
+        <block>
+            <module>theme</module>
+            <file_name>global.copyright.php</file_name>
+            <title>Copyright</title>
+            <template>no_title</template>
+            <position>[FOOTER]</position>
+            <all_func>1</all_func>
+            <config><!-- serialized PHP array, để trống nếu không cần --></config>
+        </block>
+    </setblocks>
 </theme>
 ```
 
 > Sau khi sửa `config.ini`: **Admin → Công cụ web → Làm sạch cache**
+
+**Lưu ý các trường đúng:**
+- `<info>` dùng `<name>`, không phải `<n>`
+- `<position>` dùng `<name>` và `<tag>`, không phải `<n>`
+- `<info>` không có trường `<version>`
 
 ---
 
@@ -83,7 +165,10 @@ cp -r themes/default themes/ten-theme-moi
 
 **Bước 1** — Khai báo trong `config.ini`:
 ```xml
-<position><n>Tên hiển thị</n><tag>[TEN_KHOI]</tag></position>
+<position>
+    <name>TEN_KHOI</name>
+    <tag>[TEN_KHOI]</tag>
+</position>
 ```
 Tag: **in hoa**, chỉ dùng chữ/số/gạch dưới — vd: `[BOTTOM_CONTENT]`, `[BANNER_TOP]`
 
@@ -93,6 +178,57 @@ Tag: **in hoa**, chỉ dùng chữ/số/gạch dưới — vd: `[BOTTOM_CONTENT]
 ```
 
 **Bước 3** — Xóa cache → Admin → kéo thả block vào position mới để kiểm tra.
+
+---
+
+## Layout files — cấu trúc split
+
+Layout file được tách thành nhiều phần include lẫn nhau qua cú pháp `{FILE "filename.tpl"}`:
+
+```html
+<!-- layout.main.tpl -->
+<!-- BEGIN: main -->
+{FILE "header_only.tpl"}
+{FILE "header_extended.tpl"}
+<div class="row">
+    [HEADER]
+</div>
+<div class="row">
+    <div class="col-md-24">
+        [TOP]
+        {MODULE_CONTENT}
+        [BOTTOM]
+    </div>
+</div>
+<div class="row">
+    [FOOTER]
+</div>
+{FILE "footer_extended.tpl"}
+{FILE "footer_only.tpl"}
+<!-- END: main -->
+```
+
+- `header_only.tpl` — `<!DOCTYPE html>...<head>...</head><body>` — chứa CSS/JS links
+- `header_extended.tpl` — logo, search form, menu site...
+- `footer_extended.tpl` — footer links, copyright, address...
+- `footer_only.tpl` — đóng `</body></html>`
+- `simple.tpl` — layout đặc biệt: chỉ include `header_only.tpl` + `{MODULE_CONTENT}` + `footer_only.tpl`
+
+---
+
+## Block templates — các style có sẵn
+
+Khi kéo block vào position, admin chọn template bằng key (tên file bỏ `block.` và `.tpl`):
+
+| Template key | File | Kết quả |
+|---|---|---|
+| `default` | `block.default.tpl` | **BẮT BUỘC** — panel-default có tiêu đề |
+| `primary` | `block.primary.tpl` | panel-primary có tiêu đề (màu chủ đạo) |
+| `simple` | `block.simple.tpl` | panel-body + tiêu đề dạng `<h3>` |
+| `border` | `block.border.tpl` | well Bootstrap — không có tiêu đề |
+| `no_title` | `block.no_title.tpl` | chỉ content, không tiêu đề, không wrapper |
+
+Tất cả đều dùng `{BLOCK_TITLE}` và `{BLOCK_CONTENT}` làm biến nội dung.
 
 ---
 
@@ -109,6 +245,8 @@ Tag: **in hoa**, chỉ dùng chữ/số/gạch dưới — vd: `[BOTTOM_CONTENT]
 <!-- BEGIN: main.co_anh -->
   <img src="{ROW.image}">
 <!-- END: main.co_anh -->
+
+{FILE "ten-file.tpl"}   <!-- include file tpl khác (dùng trong layout) -->
 ```
 
 ```php
@@ -127,26 +265,187 @@ return $xtpl->text('main');
 
 ---
 
-## Block global của theme
+## theme.php — cấu trúc file
 
-Block của **theme** đặt trong `themes/ten-theme/blocks/global.TEN.php`:
+Guard: `NV_SYSTEM + NV_MAINFILE`
 
 ```php
-// Guard: NV_IS_BLOCK_THEME (chỉ dùng cho block của theme)
-if (!defined('NV_IS_BLOCK_THEME')) {
+<?php
+if (!defined('NV_SYSTEM') or !defined('NV_MAINFILE')) {
     exit('Stop!!!');
 }
-$content = '...'; // $content là biến output trả về hệ thống
+
+// Cấu hình phân trang — điều chỉnh theo Bootstrap version
+$theme_config = [
+    'pagination' => [
+        // Bootstrap 3: 'pagination' / ''  / ''
+        // Bootstrap 4/5: 'pagination justify-content-center' / 'page-item' / 'page-link'
+        'ul_class' => 'pagination',
+        'li_class' => '',
+        'a_class'  => ''
+    ]
+];
+
+/**
+ * Hàm bắt buộc — render email HTML của hệ thống
+ */
+function nv_mailHTML($title, $content, $footer = '') { ... }
+
+/**
+ * Hàm bắt buộc — render trang site đầy đủ (bọc MODULE_CONTENT + block positions)
+ * $full = false → dùng simple.tpl (không có block positions)
+ */
+function nv_site_theme($contents, $full = true) { ... }
+
+/**
+ * Hàm bắt buộc — xử lý lỗi theme
+ */
+function nv_error_theme($title, $content, $code) { ... }
 ```
 
-> Block của **module** (`modules/ten-module/blocks/global.TEN.php`) dùng guard khác: `NV_MAINFILE` — xem chi tiết trong `docs/module-guide.md`.
+**CSS loading order** trong `nv_site_theme()`:
+```
+font-awesome.min.css        (system assets)
+bootstrap.min.css           (theme css/ — responsive mode 'r')
+  hoặc
+bootstrap.non-responsive.css (theme css/ — non-responsive mode 'd')
+style.css                   (theme css/)
+style.responsive.css        (theme css/ — chỉ mode 'r')
+  hoặc
+style.non-responsive.css    (theme css/ — chỉ mode 'd')
+admin.css                   (theme css/ — chỉ khi user là admin)
+[module css files]          (qua nv_html_links)
+custom.css                  (theme css/ — LUÔN LOAD SAU CÙNG → override được tất cả)
+```
 
-**Phân biệt nhanh:**
+---
+
+## Block global của theme
+
+Block của **theme** đặt trong `themes/ten-theme/blocks/global.TEN.php`. Mỗi block gồm 3 file:
+- `global.TEN.php` — logic PHP
+- `global.TEN.tpl` — template HTML
+- `global.TEN.ini` — cấu hình mặc định (tùy chọn)
+
+```php
+<?php
+// Guard: NV_MAINFILE (không phải NV_IS_BLOCK_THEME — xem bảng phân biệt)
+if (!defined('NV_MAINFILE')) {
+    exit('Stop!!!');
+}
+
+if (!nv_function_exists('nv_tenblock')) {
+    /**
+     * Form cấu hình block (hiển thị trong trang quản trị block)
+     * Tên hàm: nv_{TEN}_config (khác với module block: nv_block_config_{TEN})
+     */
+    function nv_tenblock_config($module, $data_block, $lang_block)
+    {
+        global $lang_global;
+        $html  = '<div class="form-group">';
+        $html .= '<label>' . $lang_global['label'] . '</label>';
+        $html .= '<input type="text" name="config_numrow" value="' . $data_block['numrow'] . '">';
+        $html .= '</div>';
+        return $html;
+    }
+
+    /**
+     * Xử lý submit form cấu hình block
+     * Tên hàm: nv_{TEN}_submit
+     */
+    function nv_tenblock_submit()
+    {
+        global $nv_Request;
+        return [
+            'error'  => [],
+            'config' => ['numrow' => $nv_Request->get_int('config_numrow', 'post', 5)]
+        ];
+    }
+
+    /**
+     * Render nội dung block
+     * Tên hàm: nv_{TEN}($block_config)
+     * Fallback tpl: module_theme → site_theme → default
+     */
+    function nv_tenblock($block_config)
+    {
+        global $global_config, $lang_global;
+
+        // Tpl nằm trong blocks/ (không phải layout/)
+        if (file_exists(NV_ROOTDIR . '/themes/' . $global_config['module_theme'] . '/blocks/global.tenblock.tpl')) {
+            $block_theme = $global_config['module_theme'];
+        } elseif (file_exists(NV_ROOTDIR . '/themes/' . $global_config['site_theme'] . '/blocks/global.tenblock.tpl')) {
+            $block_theme = $global_config['site_theme'];
+        } else {
+            $block_theme = 'default';
+        }
+
+        $xtpl = new XTemplate('global.tenblock.tpl', NV_ROOTDIR . '/themes/' . $block_theme . '/blocks');
+        $xtpl->assign('LANG', $lang_global);
+        $xtpl->parse('main');
+        return $xtpl->text('main');
+    }
+}
+
+if (defined('NV_SYSTEM')) {
+    $content = nv_tenblock($block_config);
+}
+```
+
+**Quy tắc đặt tên hàm — phân biệt theme block vs module block:**
+
+| Loại | Config func | Submit func | Render func |
+|---|---|---|---|
+| Block của **theme** | `nv_{TEN}_config()` | `nv_{TEN}_submit()` | `nv_{TEN}($block_config)` |
+| Block của **module** | `nv_block_config_{TEN}()` | `nv_block_config_{TEN}_submit()` | `nv_{TEN}($block_config)` |
+
+**Phân biệt guard constant:**
 
 | Loại block | Vị trí file | Guard constant |
 |---|---|---|
-| Block của theme | `themes/ten-theme/blocks/global.*.php` | `NV_IS_BLOCK_THEME` |
+| Block của theme | `themes/ten-theme/blocks/global.*.php` | `NV_MAINFILE` |
 | Block của module | `modules/ten-module/blocks/global.*.php` | `NV_MAINFILE` |
+| Block của module (context) | `modules/ten-module/blocks/module.*.php` | `NV_MAINFILE` |
+
+> Cả 3 loại đều dùng `NV_MAINFILE` — không có `NV_IS_BLOCK_THEME` trong codebase thực tế.
+
+---
+
+## config.php và config_default.php
+
+`config_default.php` — định nghĩa giá trị CSS mặc định cho giao diện tùy biến admin. Guard: `NV_MAINFILE`.
+
+```php
+<?php
+if (!defined('NV_MAINFILE')) {
+    exit('Stop!!!');
+}
+
+$default_config_theme = [
+    'body'         => ['color' => '', 'font_size' => '', 'background_color' => '', ...],
+    'a_link'       => ['color' => '', ...],
+    'a_link_hover' => ['color' => '', ...],
+    'content'      => ['margin' => '', 'padding' => '', ...],
+    'header'       => ['background_color' => '', ...],
+    'footer'       => ['background_color' => '', ...],
+    'block'        => ['background_color' => '', 'border_color' => '', ...],
+    'block_heading'=> ['background_color' => '', ...],
+    'generalcss'   => '',
+    'gfont'        => ['family' => '', 'styles' => '', 'subset' => '']
+];
+```
+
+`config.php` — form xử lý tùy biến CSS admin (lưu vào `NV_CONFIG_GLOBALTABLE`). Guard: `NV_IS_FILE_THEMES`. Dùng `system/config.tpl` làm template.
+
+Các CSS token tương ứng khi ghi file `custom_{theme}.css`:
+- `[body]` → `body`
+- `[a_link]` → `a, a:link, a:active, a:visited`
+- `[a_link_hover]` → `a:hover`
+- `[content]` → `.wraper`
+- `[header]` → `#header`
+- `[footer]` → `#footer`
+- `[block]` → `.panel, .well, .nv-block-banners`
+- `[block_heading]` → `.panel-default > .panel-heading`
 
 ---
 
@@ -164,6 +463,8 @@ $content = '...'; // $content là biến output trả về hệ thống
 
 - [ ] `block.default.tpl` tồn tại — không xóa
 - [ ] `config.ini` có `<layoutdefault>` hợp lệ
+- [ ] `config.ini` dùng `<name>` (không phải `<n>`) trong `<info>` và `<position>`
+- [ ] `theme.php` có `$theme_config['pagination']` đúng với Bootstrap version đang dùng
 - [ ] CSS tùy chỉnh → `custom.css` | JS tùy chỉnh → `custom.js`
 - [ ] Xóa layout/template không dùng
 - [ ] Xóa cache sau khi thay đổi `config.ini`

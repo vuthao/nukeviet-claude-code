@@ -44,6 +44,19 @@ $db->affected_rows_count($sql, $data)     // UPDATE/DELETE + trả về rowCount
 $db->dblikeescape($value)         // escape ký tự đặc biệt trong LIKE (%, _)
 $db->regexpescape($value)         // escape ký tự đặc biệt trong REGEXP
 $db->quote($value)                // PDO quote — dùng khi không thể dùng bindParam
+
+// closeCursor — giải phóng connection sau while-loop (quan trọng khi có nhiều query song song)
+$result = $db_slave->query($sql);
+while ($row = $result->fetch()) {
+    // xử lý
+}
+$result->closeCursor();
+
+// fetchAll với numeric index — dùng với list() destructuring
+$rows = $db_slave->query($sql)->fetchAll(PDO::FETCH_NUM);
+foreach ($rows as [$id, $title, $alias]) {
+    // truy cập theo thứ tự cột SELECT
+}
 ```
 
 ---

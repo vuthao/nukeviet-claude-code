@@ -34,15 +34,24 @@ URL              : ?lang=vi&nv=ten-module&op=ten-func
 
 **Kiểm tra hằng bắt buộc đầu mỗi file:**
 ```
-version.php          → NV_ADMIN + NV_MAINFILE
-functions.php        → NV_SYSTEM
-admin.functions.php  → NV_ADMIN + NV_MAINFILE + NV_IS_MODADMIN
-admin.menu.php       → NV_ADMIN
-action_mysql.php     → NV_IS_FILE_MODULES
-funcs/main.php       → NV_IS_MOD_TENMODULE  (define trong functions.php)
-admin/main.php       → NV_IS_FILE_ADMIN     (define trong admin.functions.php)
-blocks/*.php (module)→ NV_MAINFILE          (KHÔNG phải NV_IS_BLOCK_THEME)
-blocks/*.php (theme) → NV_IS_BLOCK_THEME
+version.php              → NV_ADMIN + NV_MAINFILE
+functions.php            → NV_SYSTEM
+admin.functions.php      → NV_ADMIN + NV_MAINFILE + NV_IS_MODADMIN
+admin.menu.php           → NV_ADMIN
+action_mysql.php         → NV_IS_FILE_MODULES
+global.functions.php     → NV_MAINFILE
+funcs/main.php           → NV_IS_MOD_TENMODULE  (define trong functions.php)
+admin/main.php           → NV_IS_FILE_ADMIN     (define trong admin.functions.php)
+blocks/global.*.php (module) → NV_MAINFILE      (KHÔNG phải NV_IS_BLOCK_THEME)
+blocks/module.*.php (module) → NV_MAINFILE      (chỉ active khi module đang chạy)
+blocks/*.php (theme)     → NV_IS_BLOCK_THEME
+Shared/*.php             → NV_MAINFILE
+```
+
+**$allow_func — hai pattern hợp lệ:**
+```
+Module đơn giản (page): $allow_func khai báo trong admin.functions.php
+Module phức tạp (news): $allow_func khai báo trong admin.menu.php (cùng với $submenu)
 ```
 
 **Hằng phân quyền quan trọng:**
@@ -70,12 +79,14 @@ NV_CONFIG_GLOBALTABLE→ bảng config toàn cục hệ thống (dùng cho comme
 modules/ten-module/
 ├── version.php           # BẮT BUỘC — phiên bản dạng X.Y.ZZ (vd: 4.0.00)
 ├── functions.php         # BẮT BUỘC — không xóa dù rỗng; define NV_IS_MOD_*
-├── admin.functions.php
-├── admin.menu.php        # $submenu, $allow_func
+├── admin.functions.php   # define NV_IS_FILE_ADMIN; $allow_func (module đơn giản)
+├── admin.menu.php        # $submenu; $allow_func (module phức tạp — cả hai ở đây)
 ├── action_mysql.php      # $sql_create_module + $sql_drop_module
+├── global.functions.php  # tùy chọn — hàm dùng chung frontend+admin (guard: NV_MAINFILE)
 ├── theme.php             # hàm giao diện ngoài site
 ├── funcs/main.php        # func mặc định ngoài site
 ├── admin/main.php        # func mặc định admin
+├── Shared/               # PSR-4 classes: namespace NukeViet\Module\{name}\Shared\
 └── language/vi.php · en.php · admin_vi.php · admin_en.php
 ```
 Template `.tpl` → `themes/[theme]/modules/[module]/` — **KHÔNG** trong `modules/`
@@ -86,17 +97,30 @@ Template `.tpl` → `themes/[theme]/modules/[module]/` — **KHÔNG** trong `mod
 
 ```
 themes/ten-theme/
-├── config.ini            # tên, layoutdefault, <positions>
-├── theme.php
-├── default.jpg           # 800×600px
-├── css/custom.css        # ← CSS tùy chỉnh viết vào đây
-├── js/custom.js          # ← JS tùy chỉnh viết vào đây
-├── layout/block.default.tpl  # BẮT BUỘC — không xóa
+├── config.ini            # tên, layoutdefault, positions, setlayout, setblocks
+├── config_default.php    # CSS defaults (guard: NV_MAINFILE)
+├── config.php            # form tùy biến CSS admin (guard: NV_IS_FILE_THEMES)
+├── theme.php             # guard: NV_SYSTEM + NV_MAINFILE; $theme_config['pagination']
+├── css/custom.css        # ← CSS tùy chỉnh — load SAU CÙNG (override được tất cả)
+├── js/custom.js          # ← JS tùy chỉnh
+├── language/             # ngôn ngữ của theme
+├── fonts/                # icon fonts
+├── system/               # config.tpl, mail.tpl, error tpls
+├── layout/
+│   ├── block.default.tpl     # BẮT BUỘC — không xóa
+│   ├── block.{style}.tpl     # primary, simple, border, no_title
+│   ├── header_only.tpl · header_extended.tpl
+│   ├── footer_only.tpl · footer_extended.tpl
+│   ├── simple.tpl            # layout tối giản, không block positions
+│   └── layout.{name}.tpl     # layout chính; include header/footer qua {FILE "..."}
+├── blocks/global.TEN.{php,tpl,ini}  # block của theme (guard: NV_MAINFILE)
 └── modules/ten-module/   # override tpl — chỉ copy khi thực sự cần sửa
 ```
 
-**Layout grid 24 cột** (NukeViet mở rộng từ Bootstrap v3.3, tăng từ 12 lên 24 cột): `main`=24 | `main-right`=18-6 | `left-main`=6-18 | `left-main-right`=5-13-6  
-**Block position:** khai báo `<position><tag>[TEN_KHOI]</tag></position>` trong `config.ini`  
+**Layout grid 24 cột**: `main`=24 | `main-right`=18-6 | `left-main`=6-18 | `left-main-right`=5-13-6
+**Block position** — config.ini dùng `<name>TAG</name>` và `<tag>[TAG]</tag>` (không phải `<n>`)
+**config.ini `<setlayout>`** — gán layout cố định theo `module:func`
+**config.ini `<setblocks>`** — blocks cài sẵn khi install theme
 **Sau thay đổi config.ini:** Admin → Công cụ web → Làm sạch cache
 
 ---

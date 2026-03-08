@@ -7,11 +7,13 @@ modules/ten-module/
 ├── version.php           # BẮT BUỘC — phiên bản dạng X.Y.ZZ (vd: 4.0.00)
 ├── functions.php         # BẮT BUỘC — không xóa dù rỗng; define NV_IS_MOD_*
 ├── admin.functions.php   # BẮT BUỘC
-├── admin.menu.php        # BẮT BUỘC — $submenu, $allow_func
+├── admin.menu.php        # BẮT BUỘC — $submenu (và $allow_func nếu module phức tạp)
 ├── action_mysql.php      # $sql_create_module + $sql_drop_module
+├── global.functions.php  # tùy chọn — hàm dùng chung cả frontend lẫn admin
 ├── theme.php             # hàm giao diện ngoài site
 ├── funcs/main.php        # func mặc định ngoài site
 ├── admin/main.php        # func mặc định admin
+├── Shared/               # PSR-4 classes (namespace NukeViet\Module\{name}\Shared\)
 └── language/vi.php · en.php · admin_vi.php · admin_en.php
 ```
 
@@ -29,7 +31,7 @@ if (!defined('NV_ADMIN') or !defined('NV_MAINFILE')) {
 }
 $module_version = [
     'name'        => 'Tên module',
-    'modfuncs'    => 'main',
+    'modfuncs'    => 'main',           // danh sách func, cách nhau bằng dấu phẩy
     'is_sysmod'   => 0,
     'virtual'     => 1,
     'version'     => '4.0.00',
@@ -37,10 +39,26 @@ $module_version = [
     'author'      => 'Tác giả',
     'note'        => '',
     'uploads_dir' => [$module_upload],  // dùng $module_upload, không phải $module_name
+
+    // --- Các key tùy chọn (dùng khi cần) ---
+
+    // Func hỗ trợ tái tạo alias — danh sách con của modfuncs
+    // 'change_alias' => 'func1,func2',
+
+    // Func hiển thị dưới dạng submenu trong admin (thay vì menu chính)
+    // 'submenu'      => 'func1,func2',
+
+    // Thư mục uploads phụ (ngoài thư mục gốc)
+    // 'uploads_dir'  => [$module_upload, $module_upload . '/source', $module_upload . '/thumb'],
+
+    // Thư mục files/ (khác với uploads/) — vd: chứa file cấu hình, dữ liệu tĩnh
+    // 'files_dir'    => [$module_upload . '/topics'],
 ];
 ```
 
 ### functions.php
+
+Module đơn giản — chỉ define hằng:
 ```php
 <?php
 if (!defined('NV_SYSTEM')) {
@@ -49,33 +67,103 @@ if (!defined('NV_SYSTEM')) {
 define('NV_IS_MOD_TENMODULE', true); // tên hằng riêng cho từng module
 ```
 
+Module phức tạp — có thể thêm logic khởi tạo:
+```php
+<?php
+if (!defined('NV_SYSTEM')) {
+    exit('Stop!!!');
+}
+
+// Định nghĩa có điều kiện (vd: không define khi ở một số func đặc biệt)
+if (!in_array($op, ['viewcat', 'detail'], true)) {
+    define('NV_IS_MOD_TENMODULE', true);
+}
+
+// Load shared helper dùng chung cả frontend lẫn admin
+require_once NV_ROOTDIR . '/modules/' . $module_file . '/global.functions.php';
+
+// Có thể khởi tạo dữ liệu dùng chung ($global_array_cat, menu dọc, v.v.)
+```
+
+### global.functions.php
+
+File hàm dùng chung cho cả frontend (`functions.php`) lẫn admin (`admin.functions.php`). Không bắt buộc nhưng là pattern chuẩn cho module phức tạp.
+
+```php
+<?php
+// Guard: NV_MAINFILE (giống block của module)
+if (!defined('NV_MAINFILE')) {
+    exit('Stop!!!');
+}
+
+// Có thể dùng PSR-4 class từ thư mục Shared/
+use NukeViet\Module\tenmodule\Shared\Helper;
+
+/**
+ * Hàm helper dùng chung cả frontend lẫn admin
+ */
+function nv_tenmodule_get_item($id)
+{
+    global $db_slave;
+    $sql = 'SELECT * FROM ' . NV_PREFIXLANG . '_tenmodule WHERE id = ' . (int) $id;
+    return $db_slave->query($sql)->fetch();
+}
+```
+
 ### admin.functions.php
+
+**Pattern 1 — module đơn giản (như page):** `$allow_func` khai báo tại đây.
+
 ```php
 <?php
 if (!defined('NV_ADMIN') or !defined('NV_MAINFILE') or !defined('NV_IS_MODADMIN')) {
     exit('Stop!!!');
 }
 
-// Danh sách func admin được phép — khai báo ở đây, KHÔNG phải admin.menu.php
+// Danh sách func admin được phép
 $allow_func = ['main', 'content', 'del', 'edit'];
 define('NV_IS_FILE_ADMIN', true);
 
-// Thêm func chỉ dành riêng cho super admin
+// Func chỉ dành riêng cho super admin
 if (defined('NV_IS_SPADMIN')) {
     $allow_func[] = 'config';
 }
 
-// Không cần define hằng riêng cho module ở đây; dùng NV_IS_FILE_ADMIN làm guard cho admin/
+// Load shared helper (nếu có global.functions.php)
+// require_once NV_ROOTDIR . '/modules/' . $module_file . '/global.functions.php';
+```
+
+**Pattern 2 — module phức tạp (như news):** `$allow_func` khai báo trong `admin.menu.php`, file này chỉ chứa hàm hiển thị + định nghĩa hằng.
+
+```php
+<?php
+if (!defined('NV_ADMIN') or !defined('NV_MAINFILE') or !defined('NV_IS_MODADMIN')) {
+    exit('Stop!!!');
+}
+
+define('NV_IS_FILE_ADMIN', true);
+
+// Load shared helper
+require_once NV_ROOTDIR . '/modules/' . $module_file . '/global.functions.php';
+
+// Hàm hiển thị dùng trong nhiều trang admin (vd: dropdown danh mục)
+function nv_tenmodule_show_cat_list($selected = 0)
+{
+    // ...
+}
 ```
 
 ### admin.menu.php
+
+**Pattern 1 — module đơn giản (như page):** chỉ khai báo `$submenu`.
+
 ```php
 <?php
 if (!defined('NV_ADMIN')) {
     exit('Stop!!!');
 }
 
-// Chỉ khai báo $submenu (menu hiển thị trên UI) — KHÔNG khai báo $allow_func ở đây
+// Chỉ khai báo $submenu (menu hiển thị trên UI)
 $submenu['content'] = $lang_module['menu_content']; // key tương ứng với tên func
 
 // Config menu chỉ hiển thị với super admin
@@ -83,7 +171,37 @@ if (defined('NV_IS_SPADMIN')) {
     $submenu['config'] = $lang_module['menu_config'];
 }
 
-// $allow_func được khai báo trong admin.functions.php, không phải ở đây
+// $allow_func được khai báo trong admin.functions.php
+```
+
+**Pattern 2 — module phức tạp (như news):** khai báo cả `$allow_func` và `$submenu`.
+
+```php
+<?php
+if (!defined('NV_ADMIN')) {
+    exit('Stop!!!');
+}
+
+// Module phức tạp có thể khai báo $allow_func và $submenu cùng nhau ở đây
+$allow_func = ['main', 'content', 'edit', 'del'];
+
+// Submenu dạng đơn giản
+$submenu['content'] = $lang_module['menu_content'];
+
+// Submenu dạng lồng nhau (nested)
+$submenu['setting'] = [
+    'title'   => $lang_module['menu_setting'],
+    'submenu' => [
+        'voices' => $lang_module['menu_voices'],
+        'config' => $lang_module['menu_config'],
+    ]
+];
+
+// Thêm func theo quyền
+if (defined('NV_IS_SPADMIN')) {
+    $allow_func[] = 'system';
+    $submenu['system'] = $lang_module['menu_system'];
+}
 ```
 
 ### action_mysql.php
@@ -194,6 +312,45 @@ echo nv_admin_theme($contents);
 include NV_ROOTDIR . '/includes/footer.php';
 ```
 
+### PSR-4 Classes trong module
+
+Module phức tạp có thể dùng PSR-4 autoloading. Đặt class trong thư mục `Shared/` (hoặc `Log/`, `Service/`...):
+
+```
+modules/ten-module/
+└── Shared/
+    ├── Posts.php     → namespace NukeViet\Module\tenmodule\Shared;
+    └── Helper.php    → namespace NukeViet\Module\tenmodule\Shared;
+```
+
+```php
+<?php
+// modules/ten-module/Shared/Posts.php
+namespace NukeViet\Module\tenmodule\Shared;
+
+if (!defined('NV_MAINFILE')) {
+    exit('Stop!!!');
+}
+
+class Posts
+{
+    const STATUS_DEACTIVE = 0;
+    const STATUS_PUBLISH  = 1;
+    const STATUS_PENDING  = 2;
+
+    // ...
+}
+```
+
+Dùng trong code:
+```php
+use NukeViet\Module\tenmodule\Shared\Posts;
+
+if ($row['status'] === Posts::STATUS_PUBLISH) {
+    // ...
+}
+```
+
 ### Lấy input — PHẢI qua $nv_Request
 
 ```php
@@ -238,7 +395,15 @@ $desc  = nv_htmlspecialchars(nv_br2nl($row['description']));
 
 ## Block trong module
 
-Block đặt trong `modules/ten-module/blocks/global.TEN.php` (khác với block của theme).
+Có hai loại block:
+
+| Loại | File | Guard |
+|---|---|---|
+| Block toàn site (`global.*`) | `modules/ten-module/blocks/global.TEN.php` | `NV_MAINFILE` |
+| Block theo context module (`module.*`) | `modules/ten-module/blocks/module.TEN.php` | `NV_MAINFILE` |
+
+`blocks/global.*` — hiển thị mọi nơi trên site.
+`blocks/module.*` — chỉ hiển thị khi module đó đang active (dùng trong sidebar của module).
 
 ```php
 <?php
@@ -334,7 +499,8 @@ if (defined('NV_SYSTEM')) {
 - [ ] Template `.tpl` đặt trong `themes/` không phải `modules/`
 - [ ] Language có đủ `vi.php` và `admin_vi.php`
 - [ ] `action_mysql.php` có cả `$sql_drop_module` và `$sql_create_module`
-- [ ] `admin.functions.php` khai báo `$allow_func` và `define('NV_IS_FILE_ADMIN', true)`
+- [ ] `admin.functions.php` có `define('NV_IS_FILE_ADMIN', true)`
+- [ ] `$allow_func` khai báo trong `admin.functions.php` (module đơn giản) hoặc `admin.menu.php` (module phức tạp)
 - [ ] Input qua `$nv_Request`, output qua `nv_htmlspecialchars()`
 - [ ] theme.php dùng `$module_info['module_theme']` cho đường dẫn tpl ngoài site
 - [ ] admin/*.php dùng `$module_file` cho đường dẫn tpl admin
