@@ -1,0 +1,18 @@
+---
+description: NukeViet 4.x — áp dụng cho toàn bộ dự án
+globs: ["**/*.php", "**/modules/**", "**/themes/**"]
+alwaysApply: true
+---
+
+# Cursor Rules — NukeViet 4.x
+
+Tài liệu kỹ thuật đầy đủ trong `docs/`. Đọc file phù hợp với task đang làm:
+
+| Đang làm gì | Đọc file nào |
+|---|---|
+| Tạo/sửa module | `docs/module-guide.md` |
+| Tạo/sửa theme | `docs/theme-guide.md` |
+| Review bảo mật | `docs/security-guide.md` |
+| Viết query MySQL | `docs/mysql-guide.md` |
+| Nâng cấp module/theme | `docs/upgrade-guide.md` rồi `docs/upgrade/module/` hoặc `docs/upgrade/theme/` |
+| Tra cứu conventions | `docs/ai-context.md` |
