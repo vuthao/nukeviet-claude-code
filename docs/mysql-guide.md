@@ -13,37 +13,45 @@ NV_TABLEPREFIX . '_ten_bang'   // bảng dùng chung   → nv4_users
 ## $db — method hay dùng
 
 ```php
-$db->query($sql)            // chạy query
-$db->fetch_assoc($result)   // lấy 1 dòng dưới dạng mảng
-$db->num_rows($result)      // đếm số dòng kết quả
-$db->insert_id()            // ID vừa INSERT
-$db->dbescape($val)         // escape + bao nháy đơn → trả về 'value'
-$db->result($result, 0)     // lấy ô đầu tiên
+$db->query($sql)                  // chạy query, trả về PDOStatement
+$db->query($sql)->fetch()         // chạy query + lấy 1 dòng
+$db->query($sql)->fetchAll()      // chạy query + lấy tất cả dòng
+$db->query($sql)->fetchColumn()   // chạy query + lấy giá trị ô đầu tiên (COUNT, MAX...)
+$db->prepare($sql)                // chuẩn bị prepared statement
+$db->lastInsertId()               // ID vừa INSERT
 ```
-
-> `dbescape()` **tự bao dấu nháy đơn** — không thêm nháy thủ công trong câu SQL.
 
 ---
 
-## Pattern: đếm + phân trang
+## Pattern: SELECT
+
+```php
+// Nhiều dòng
+$sql  = 'SELECT id, title FROM ' . NV_PREFIXLANG . '_items WHERE status = 1 ORDER BY weight ASC';
+$rows = $db->query($sql)->fetchAll();
+
+// 1 dòng
+$sql = 'SELECT * FROM ' . NV_PREFIXLANG . '_items WHERE id = ' . (int) $id . ' LIMIT 1';
+$row = $db->query($sql)->fetch();
+
+// 1 giá trị (COUNT, MAX...)
+$total = (int) $db->query('SELECT COUNT(*) FROM ' . NV_PREFIXLANG . '_items')->fetchColumn();
+$max   = (int) $db->query('SELECT MAX(weight) FROM ' . NV_PREFIXLANG . '_items')->fetchColumn();
+```
+
+## Pattern: phân trang
 
 ```php
 $where = ' WHERE status = 1';
-$total = (int) $db->result(
-    $db->query('SELECT COUNT(*) FROM ' . NV_PREFIXLANG . '_items' . $where), 0
-);
+$total = (int) $db->query('SELECT COUNT(*) FROM ' . NV_PREFIXLANG . '_items' . $where)->fetchColumn();
 
 if ($total > 0) {
     $offset = ($page - 1) * $perPage;
     $sql    = 'SELECT id, title, alias, created_at'
-            . ' FROM '   . NV_PREFIXLANG . '_items' . $where
+            . ' FROM '  . NV_PREFIXLANG . '_items' . $where
             . ' ORDER BY created_at DESC'
-            . ' LIMIT '  . $perPage . ' OFFSET ' . $offset;
-    $result = $db->query($sql);
-    $items  = [];
-    while ($row = $db->fetch_assoc($result)) {
-        $items[] = $row;
-    }
+            . ' LIMIT ' . $perPage . ' OFFSET ' . $offset;
+    $rows = $db->query($sql)->fetchAll();
 }
 ```
 
@@ -51,26 +59,33 @@ if ($total > 0) {
 
 ## Pattern: INSERT / UPDATE an toàn
 
-```php
-// Input đã qua $nv_Request trước khi vào đây
-$title   = $db->dbescape($data['title']);     // → 'Tiêu đề'
-$content = $db->dbescape($data['content']);
-$status  = (int) ($data['status'] ?? 1);
+**Quy tắc:** số nguyên và hằng hệ thống nối thẳng vào SQL — dữ liệu từ user input dùng `:named_param` + `bindParam`.
 
+```php
 // INSERT
-$sql = 'INSERT INTO ' . NV_PREFIXLANG . '_items (title, content, status, created_at)'
-     . ' VALUES (' . $title . ', ' . $content . ', ' . $status . ', ' . NV_CURRENTTIME . ')';
-$db->query($sql);
-$new_id = $db->insert_id();
+$sql = 'INSERT INTO ' . NV_PREFIXLANG . '_items (title, content, status, created_at)
+        VALUES (:title, :content, :status, ' . NV_CURRENTTIME . ')';
+$sth = $db->prepare($sql);
+$sth->bindParam(':title',   $row['title'],   PDO::PARAM_STR);
+$sth->bindParam(':content', $row['content'], PDO::PARAM_STR, strlen($row['content']));
+$sth->bindParam(':status',  $row['status'],  PDO::PARAM_INT);
+$sth->execute();
+$new_id = $db->lastInsertId();
 
 // UPDATE
-$sql = 'UPDATE ' . NV_PREFIXLANG . '_items'
-     . ' SET title='   . $title
-     . ', content='    . $content
-     . ', status='     . $status
-     . ', updated_at=' . NV_CURRENTTIME
-     . ' WHERE id='    . $id;
-$db->query($sql);
+$sql = 'UPDATE ' . NV_PREFIXLANG . '_items
+        SET title = :title, content = :content, updated_at = ' . NV_CURRENTTIME . '
+        WHERE id = ' . $id;
+$sth = $db->prepare($sql);
+$sth->bindParam(':title',   $row['title'],   PDO::PARAM_STR);
+$sth->bindParam(':content', $row['content'], PDO::PARAM_STR, strlen($row['content']));
+$sth->execute();
+if ($sth->rowCount()) {
+    // cập nhật thành công
+}
+
+// DELETE
+$db->query('DELETE FROM ' . NV_PREFIXLANG . '_items WHERE id = ' . (int) $id);
 ```
 
 ---

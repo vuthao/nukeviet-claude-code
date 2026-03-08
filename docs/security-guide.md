@@ -4,7 +4,7 @@
 
 ```bash
 # Input không qua $nv_Request
-grep -rn "\$_GET\|\$_POST\|\$_REQUEST" . --include="*.php" | grep -v "nv_Request\|dbescape\|(int)\|(float)"
+grep -rn "\$_GET\|\$_POST\|\$_REQUEST" . --include="*.php" | grep -v "nv_Request\|(int)\|(float)"
 
 # Output không escape
 grep -rn "echo \$\|print \$" . --include="*.php" | grep -v "htmlspecialchars\|nv_html\|intval"
@@ -14,6 +14,9 @@ grep -rn "is_file\|file_exists" . --include="*.php" | grep -v "nv_is_file\|NV_RO
 
 # Open Redirect qua selfurl
 grep -rn "client_info\['selfurl'\]" . --include="*.php" | grep "redirect\|location\|header"
+
+# Nối chuỗi input trực tiếp vào SQL (không qua prepare)
+grep -rn "\$_POST\|\$_GET\|\$_REQUEST" . --include="*.php" | grep "query\|WHERE\|INSERT\|UPDATE"
 ```
 
 ---
@@ -34,20 +37,24 @@ $body  = $nv_Request->get_editor('body', '', NV_ALLOWED_HTML_TAGS);
 $desc  = $nv_Request->get_textarea('desc', '', NV_ALLOWED_HTML_TAGS);
 ```
 
-### SQL — dbescape tự bao nháy đơn
+### SQL — PDO prepared statement cho user input
 
 ```php
-// ❌ Sai — nối chuỗi trực tiếp
-$sql = "WHERE id = " . $_GET['id'];
+// ❌ Sai — nối chuỗi input trực tiếp
+$sql = "WHERE title = '" . $_POST['title'] . "'";
 
-// ✅ Đúng — số dùng (int)
-$id  = $nv_Request->get_int('id', 'get', 0);
-$sql = 'SELECT * FROM ' . NV_PREFIXLANG . '_news WHERE id = ' . $id;
+// ✅ Đúng — số nguyên dùng (int)
+$sql = '... WHERE id = ' . (int) $id;
 
-// ✅ Đúng — chuỗi dùng dbescape (tự có nháy đơn, không thêm nháy trong SQL)
-$kw  = $nv_Request->get_title('kw', 'get', '');
-$sql = '... WHERE title LIKE ' . $db->dbescape('%' . $kw . '%');
+// ✅ Đúng — chuỗi từ user dùng prepared statement
+$sql = 'SELECT * FROM ' . NV_PREFIXLANG . '_items WHERE title = :title';
+$sth = $db->prepare($sql);
+$sth->bindParam(':title', $title, PDO::PARAM_STR);
+$sth->execute();
+$row = $sth->fetch();
 ```
+
+> Hằng hệ thống (`NV_CURRENTTIME`, `$admin_info['admin_id']`...) và số nguyên đã ép kiểu `(int)` nối thẳng vào SQL là an toàn — không cần prepare.
 
 ### XSS output
 
@@ -116,7 +123,7 @@ function xoaItem($id) {
 | `$nv_Request->get_editor` | Nội dung rich editor |
 | `$nv_Request->get_textarea` | Nội dung textarea |
 | `nv_htmlspecialchars()` | Escape HTML output |
-| `$db->dbescape()` | Escape vào SQL (tự có nháy đơn) |
+| `$db->prepare()` + `bindParam()` | Chuỗi từ user vào SQL |
 | `nv_is_file()` | Kiểm tra file an toàn |
 | `nv_redirect_encrypt/decrypt` | Redirect an toàn |
 | `nv_check_valid_email()` | Validate email |

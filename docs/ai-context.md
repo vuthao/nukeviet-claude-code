@@ -1,10 +1,10 @@
 # NukeViet 4.x — AI Context
 
-> File này là **nguồn sự thật duy nhất** cho tất cả AI tool.
+> File này là **nguồn sự thật duy nhất** cho tất cả AI tool.  
 > Khi cần cập nhật convention → chỉ sửa file này.
 
 ## Stack
-PHP 8.1+, MySQL 8.0, NukeViet 4.x · Ubuntu 22.04, Nginx+PHP-FPM
+PHP 8.1+, MySQL 8.0, NukeViet 4.x · Ubuntu 22.04, Nginx+PHP-FPM  
 GitLab: `main` (prod) | `develop` (staging)
 
 ---
@@ -14,12 +14,11 @@ GitLab: `main` (prod) | `develop` (staging)
 | Tình huống | Đúng |
 |---|---|
 | Lấy input | `$nv_Request->get_int/get_title/get_editor()` — không `$_GET/$_POST` trực tiếp |
-| SQL | `$db->dbescape()` hoặc `(int)` — không nối chuỗi input |
+| SQL | PDO `prepare()` + `bindParam()` cho chuỗi từ user — số nguyên dùng `(int)` trực tiếp |
 | HTML output | `nv_htmlspecialchars()` |
 | Kiểm tra file | `nv_is_file()` — không `is_file()` với path từ user |
 | Redirect | `$page_url` hoặc `nv_redirect_encrypt()` — không `$client_info['selfurl']` trực tiếp |
 | Admin ghi | Kiểm tra `defined('NV_IS_ADMIN')` trước |
-| `$db->dbescape()` | Tự bao dấu nháy đơn — không thêm nháy thủ công trong SQL |
 
 ---
 
@@ -79,9 +78,8 @@ themes/ten-theme/
 └── modules/ten-module/   # override tpl — chỉ copy khi thực sự cần sửa
 ```
 
-**Layout grid 24 cột** (NukeViet mở rộng từ Bootstrap v3.3, tăng từ 12 lên 24 cột):
-`main`=24 | `main-right`=18-6 | `left-main`=6-18 | `left-main-right`=5-13-6
-**Block position:** khai báo `<position><tag>[TEN_KHOI]</tag></position>` trong `config.ini`
+**Layout grid 24 cột** (NukeViet mở rộng từ Bootstrap v3.3, tăng từ 12 lên 24 cột): `main`=24 | `main-right`=18-6 | `left-main`=6-18 | `left-main-right`=5-13-6  
+**Block position:** khai báo `<position><tag>[TEN_KHOI]</tag></position>` trong `config.ini`  
 **Sau thay đổi config.ini:** Admin → Công cụ web → Làm sạch cache
 
 ---
@@ -89,13 +87,15 @@ themes/ten-theme/
 ## MySQL Patterns
 
 ```php
-$db->query($sql)           // chạy query
-$db->fetch_assoc($result)  // lấy 1 dòng
-$db->num_rows($result)     // đếm dòng
-$db->insert_id()           // ID vừa INSERT
-$db->dbescape($val)        // escape + bao nháy đơn → 'value'
-$db->result($result, 0)    // ô đầu tiên
+$db->query($sql)->fetch()         // lấy 1 dòng
+$db->query($sql)->fetchAll()      // lấy tất cả dòng
+$db->query($sql)->fetchColumn()   // lấy ô đầu tiên (COUNT, MAX...)
+$db->prepare($sql)                // chuẩn bị prepared statement cho user input
+$db->lastInsertId()               // ID vừa INSERT
 ```
+
+Số nguyên và hằng hệ thống nối thẳng vào SQL — chuỗi từ user input dùng `prepare()` + `bindParam()`.  
+Chi tiết: xem `docs/mysql-guide.md`
 
 ---
 
@@ -116,7 +116,7 @@ Tài liệu chi tiết: `docs/upgrade/module/`
 
 ## Nâng cấp Theme
 
-Tài liệu chi tiết: `docs/upgrade/theme/`
+Tài liệu chi tiết: `docs/upgrade/theme/`  
 Cùng bảng lộ trình và tên file như module — chỉ khác thư mục.
 
 ---
